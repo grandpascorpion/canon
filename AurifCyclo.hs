@@ -26,7 +26,7 @@ import Math.Polynomial( Poly(), poly, multPoly, quotPoly, Endianness(..), polyCo
 import Data.List (sortBy, (\\))
 import qualified Data.Map as M
 
-import Debug.Trace(trace)
+--import Debug.Trace(trace)
 
 cr2 :: CR_
 cr2 = crFromI 2
@@ -38,8 +38,8 @@ if' False _ y = y
 -------------------------------------------
 
 crCycloAurifApply' :: Bool -> CR_ -> CR_ -> CR_ -> Integer -> CR_
-crCycloAurifApply' b x y g gi | trace ("crCycloAurifApply' trace: Processing b = " ++ (show b) ++ ", x = " ++ (show x) ++ 
-                                ", y = " ++ (show y) ++ ", g = " ++ (show g) ++ ", gi = " ++ (show gi)) False = undefined   
+--crCycloAurifApply' b x y g gi | trace ("crCycloAurifApply' trace: Processing b = " ++ (show b) ++ ", x = " ++ (show x) ++ 
+--                                ", y = " ++ (show y) ++ ", g = " ++ (show g) ++ ", gi = " ++ (show gi)) False = undefined   
 crCycloAurifApply' b x y g gi
    -- Optimization for prime g: If g is a prime (and exp not of from x^2 + y^2) but not Aurifeullian (verify 
   | (crPrime g) && not (g == cr2 && b) 
@@ -90,20 +90,22 @@ http://maths-people.anu.edu.au/~brent/pd/rpb135.pdf
 
 -- Assumptions: x and y are relatively prime and g is a positive integral CR.
 -- if it's an aurif candidate for decomposition, split it into two and evaluate it otherwise return nothing
-aurCandDec :: Integer -> Integer -> Integer -> Bool ->  Maybe (Integer, Integer)
-aurCandDec xi yi ni b | (crGCD x y) == cr1 = aurCandDec' x y ni (crFromI ni) b
-                      | otherwise          = error "aurCandDec: The first two parameters must be relatively prime to call the underlying function"
-                        where x = crFromI xi
-                              y = crFromI yi
+aurCandDec :: Integer -> Integer -> Bool ->  Maybe (Integer, Integer)
+aurCandDec xi yi b | (crGCD x y) == cr1 = aurCandDecCr x y b
+                   | otherwise          = error "aurCandDec: The first two parameters must be relatively prime to call the underlying function"
+                   where x = crFromI xi
+                         y = crFromI yi
 
-aurCandDecCr :: CR_ -> CR_ -> CR_ -> Bool ->  Maybe (Integer, Integer)
-aurCandDecCr x y ncr b | (crGCD x y) == cr1 = aurCandDec' x y (crToI ncr) ncr b      
-                       | otherwise          = error "aurCandDecCr: The first two parameters must be relatively prime to call the underlying function"                                                                       
+aurCandDecCr :: CR_ -> CR_ -> Bool ->  Maybe (Integer, Integer)
+aurCandDecCr x y b | (crGCD x y) == cr1 = aurCandDec' x y n cr b      
+                   | otherwise          = error "aurCandDecCr: The first two parameters must be relatively prime to call the underlying function"                                                                       
+                   where n  = gcd (crMaxRoot x) (crMaxRoot y)
+                         cr = crFromInteger $ fromIntegral n
 
 -- add case where: a^(da) +/- 1
 aurCandDec' :: CR_ -> CR_ -> Integer -> CR_ -> Bool -> Maybe (Integer, Integer)
-aurCandDec' x y n cr b| trace ("aurCandDec' trace: Processing x = " ++ (show x) ++ ", y = " ++ (show y) ++ 
-                               ", n = " ++ (show n) ++ " =  cr = " ++ (show cr) ++ ", b = " ++ (show b)) False = undefined     
+--aurCandDec' x y n cr b| trace ("aurCandDec' trace: Processing x = " ++ (show x) ++ ", y = " ++ (show y) ++ 
+--                               ", n = " ++ (show n) ++ " =  cr = " ++ (show cr) ++ ", b = " ++ (show b)) False = undefined     
 aurCandDec' x y n cr b| (nm4 == 1 && b) || (nm4 /= 1 && not b) ||
                         (xdg == x && ydg == y)  || (m /= 0)
                                         = Nothing -- 
@@ -153,14 +155,13 @@ aurCandDec' x y n cr b| (nm4 == 1 && b) || (nm4 /= 1 && not b) ||
                                                                                 
 -- Example Aurif. decomp: C5(x) = x^2 + 3x + 1, D5(x) = x + 1 => Cyclotomic5(x) = C5(x)^2 − 5x*D5(x)^2                                                                                                 
 
--- return a pair of polynomials (in array form) or Nothing (if it's squareful.  Need moebius)
+-- return a pair of polynomials (in array form) or Nothing (if it's squareful.)
 aurDec :: Integer -> Maybe (Array Integer Integer, Array Integer Integer)
 aurDec n | n <= 1    = error "aurifDecomp: n must be greater than 1"
          | otherwise = aurDec' n (crFromI n)
  
 aurDecCr :: CR_ -> Maybe (Array Integer Integer, Array Integer Integer)                
-aurDecCr cr | crPositive cr = aurDec' (crToI cr) cr
-            | otherwise     = Nothing
+aurDecCr cr = aurDec (crToI cr)
 
 moebius :: CR_ -> Integer
 moebius cr = if (crHasSquare cr) then 0 :: Integer else (if ((mod (length cr) 2) == 1) then (-1) else 1)
@@ -174,7 +175,7 @@ cosine' n | m8 == 2 || m8 == 6 = 0
                   cosError = "Logic error: bad/odd value passed to cosine': " ++ (show n)
 
 aurDec' :: Integer -> CR_ -> Maybe (Array Integer Integer, Array Integer Integer) 
-aurDec' n cr| trace ("aurDec' trace: Processing " ++ (show n) ++ " => " ++ (show cr)) False = undefined
+--aurDec' n cr| trace ("aurDec' trace: Processing " ++ (show n) ++ " => " ++ (show cr)) False = undefined
 aurDec' n cr| crHasSquare cr || n < 2 || n' < 2
                          = Nothing
             | otherwise  = Just (gamma, delta)
@@ -236,7 +237,7 @@ applyList l m a x = if (l == []) then a else (applyList (tail l) (m*x) (a + (toR
 -- This will help factoring because the larger term(s) will be broken up into smaller pieces
 
 divvy :: [Integer] -> Integer -> Integer -> [Integer]
-divvy a x y | trace ("divvy trace: Processing a = " ++ (show a) ++ ", x = " ++ (show x) ++ ", y =  " ++ (show y)) False = undefined     
+--divvy a x y | trace ("divvy trace: Processing a = " ++ (show a) ++ ", x = " ++ (show x) ++ ", y =  " ++ (show y)) False = undefined     
 divvy a x y = divvy' (sortBy rev a) (abs x) (abs y) 
               where rev a' b' = if (a' > b') then LT else GT    
        
@@ -368,8 +369,8 @@ applyCrCycloPair l r cr = applyCrCycloPair' l r cr cds
                           where cds = M.elems $ crCycloDivSet cr
 
 applyCrCycloPair' :: Integer -> Integer -> CR_ -> [CycloPair] -> [Integer]
-applyCrCycloPair' l r cr cds | trace ("  applyCrCycloPair' trace: Processing " ++ (show l) ++ " -> " ++ (show r) ++ 
-                                      " -> " ++ (show cr) ++ " -> " ++ (show cds)) False = undefined                           
+--applyCrCycloPair' l r cr cds | trace ("  applyCrCycloPair' trace: Processing " ++ (show l) ++ " -> " ++ (show r) ++ 
+--                                      " -> " ++ (show cr) ++ " -> " ++ (show cds)) False = undefined                           
 applyCrCycloPair' l r cr cds        = map applyPoly cds
                  where nd           = crTotient cr
                        pA v         = a where a = array (0,nd) ([(0,1)] ++ [(i, v*a!(i-1)) | i <- [1..nd]]) -- array of powers
@@ -420,7 +421,6 @@ chineseAurifCr xcr ycr b = case chineseAurif' mbcrxy n mcrxy (crToI mcrxy) b of
                                  mbcryx      = crRecip mbcrxy
                                  mcryx       = crGCD (crNumer mbcryx) ncr  
                                 
--- could you have a false match
 -- go through the divisors of n, stop when you find a match (what about squares)
 
 
@@ -437,8 +437,8 @@ This will handle a subset of the cases that the main Aurif. routines handle
 
 -- find factor of mb^n +/- 1 (mb would be M from paper, mb meaning m "big"
 chineseAurif' :: CR_ -> Integer -> CR_ -> Integer -> Bool -> Maybe (Integer, Integer) -- to fix
-chineseAurif' mbcr n mcr m b| trace ("chineseAurif' trace: Processing p1 = " ++ (show mbcr) ++ ", p2 = " ++ (show n) ++ 
-                               ", p3 = " ++ (show mcr) ++ ", p4 = " ++ (show m) ++ ", p5 = " ++ (show b)) False = undefined     
+--chineseAurif' mbcr n mcr m b| trace ("chineseAurif' trace: Processing p1 = " ++ (show mbcr) ++ ", p2 = " ++ (show n) ++ 
+--                               ", p3 = " ++ (show mcr) ++ ", p4 = " ++ (show m) ++ ", p5 = " ++ (show b)) False = undefined     
 chineseAurif' mbcr n mcr m b | mod n 2 == 0        || mod m 2 == 0 ||          -- n and m must both be odd
                                m < 3               || km /= 0      ||          -- m must be odd and > 1 and m | n
                                (mm4 == 1 && b)     || -- sign and modulus
