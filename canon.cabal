@@ -2,9 +2,9 @@
 --  see http://haskell.org/cabal/users-guide/
 
 name:                canon
-version:             0.1.0.0
+version:             0.1.0.1
 synopsis:            Massive Number Arithmetic
-description:         This library allows one to manipulate of practically unlimited by keeping them in factored "canonical" form.
+description:         This library allows one to manipulate numbers of practically unlimited size by keeping them in factored "canonical" form.
                      For manipulating sums and differences, there is additional code to factor expressions of special forms.
 
 homepage:            https://github.com/grandpascorpion/canon

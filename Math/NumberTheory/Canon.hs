@@ -49,12 +49,12 @@ type GCRE_ = (Integer, Canon)
 data Canon = Bare Integer BareStatus | Canonical GCR_ CanonValueType 
 
 -- | BareStatus: A "Bare Simplified" number means a prime number, +/-1 or 0.  The code must set the flag properly
---               A "Bare NotSimplified" number is an integer that has not been checked (to see if it can be factored).
+--               A "Bare NotSimplified" number is an Integer that has not been checked (to see if it can be factored).
 data BareStatus = Simplified | NotSimplified deriving (Eq, Ord, Show)
 
 makeCanon, makeC, makeCanonFull, makeDefCanonForExpnt :: Integer -> Canon
 
--- | Create a Canon from an integer.  This may involve expensive factorization.
+-- | Create a Canon from an Integer.  This may involve expensive factorization.
 makeCanon n = makeCanonI n False
 
 -- | Shorthand for makeCanon
@@ -141,7 +141,7 @@ instance Num Canon where -- tries to use the map but ultimately throws it away w
   abs x         = cAbs    x
   signum x      = cSignum x
 
--- | Is the Canon a more complex expression? 
+-- | Checks if the Canon is Canonical, a more complex expression.
 cCanonical :: Canon -> Bool
 cCanonical (Canonical _ _ ) = True
 cCanonical _                = False
@@ -179,7 +179,7 @@ cEq x                      (Bare y NotSimplified) | cValueType x /= IntegralC = 
 
 cEq (Canonical x a )       (Canonical y b)        = if a /= b then False else gcrEqCheck x y
 
--- | Check if a Canon is an odd integer.  Note: If the Canon is not integral, return False 
+-- | Check if a Canon is an odd Integer.  Note: If the Canon is not integral, return False 
 cOdd :: Canon -> Bool
 cOdd (Bare x _)               = mod x 2 == 1
 cOdd (Canonical c IntegralC ) = gcrOdd c
@@ -260,8 +260,7 @@ cTotient c m | (not $ cIntegral c) || cNegative c = error "Not defined for non-i
 
 cPhi = cTotient
 
--- | Hyperoperations (including tetration and beyond): https://en.wikipedia.org/wiki/Hyperoperation
--- | The thinking around the operators is that they should look progressively scarier :)
+-- | The thinking around the hyperoperators is that they should look progressively scarier :)
 infixr 9 <^>, <<^>>, <<<^>>>
 (<^>), (<<^>>), (<<<^>>>) :: Canon -> Integer -> Canon
 a <^>     b = fst $ cTetration a b crCycloInitMap
@@ -279,7 +278,7 @@ cPentation = cHyperOp 5
 -- | Hexation Function
 cHexation  = cHyperOp 6
 
--- | Generalized Hyperoperation Function
+-- | Generalized Hyperoperation Function (https://en.wikipedia.org/wiki/Hyperoperation)
 cHyperOp :: Integer -> Canon -> Integer -> CycloMap -> (Canon, CycloMap)
 cHyperOp n a b m | b < -1                       = error "Hyperoperations not defined when b < -1"
                  | n < 0                        = error "Hyperoperations require the level n >= 0"
@@ -415,14 +414,14 @@ c2  = makeCanon 2
 cToI :: Canon -> Integer
 cToI (Bare i _ )     = i
 cToI (Canonical c v) | v == IntegralC = gcrToI c 
-                     | otherwise      = error "Can't convert non-integral canon to an integer"
+                     | otherwise      = error "Can't convert non-integral Canon to an Integer"
 
 -- | Convert Canon To Double.
 cToD :: Canon -> Double
 cToD (Bare i _ )      = fromIntegral i
 cToD (Canonical c _ ) = gcrToD c 
 
--- | Multiply Function: Generally speaking this will be much cheaper.
+-- | Multiply Function: Generally speaking, this will be much cheaper.
 cMult :: Canon -> Canon -> CycloMap -> (Canon, CycloMap) 
 cMult Pc0 _   m = (c0, m)
 cMult _   Pc0 m = (c0, m)
@@ -522,7 +521,7 @@ cDiv x y   m = cMult (cReciprocal y) x m -- multiply by the reciprocal
 cReciprocal :: Canon -> Canon
 cReciprocal x = fst $ cExp x cN1 True crCycloInitMap  -- raise number to (-1)st power
 
--- | Functions to check if a Canon is integral, (ir)rational, "simplified" or a prime tower
+-- | Functions to check if a Canon is Integral, (Ir)Rational, "Simplified" or a prime tower
 cIntegral, cIrrational, cRational, cSimplified, cIsPrimeTower :: Canon -> Bool
 
 cIntegral (Bare      _ _ ) = True
@@ -581,7 +580,7 @@ cPrimeTowerLevelI (Canonical g IntegralC) n l | gcrPrimePower g == False = 0
                                               | otherwise                = cPrimeTowerLevelI (snd $ head g) n (l+1)
 cPrimeTowerLevelI _                       _ _ = 0
 
--- | Functions to Convert Canon to Generalized Canon Rep
+-- | Functions to convert Canon to generalized canon rep
 canonToGCR, cToGCR :: Canon -> GCR_
 canonToGCR (Canonical x _) = x
 canonToGCR (Bare x NotSimplified) = canonToGCR $ makeCanon x -- ToDo: Thread in CycloMap?
@@ -676,7 +675,7 @@ gcrCmpTo1 _    b = if b then LT else GT
 gcrLog :: GCR_ -> Rational
 gcrLog g = crLog $ gcrToCR g   
 
--- | These internal functions should not be called directly.  The definition of GCD and LCM are extended to handle non-integers.
+-- | These internal functions should not be called directly.  The definition of GCD and LCM are extended to handle non-Integers.
 gcrGCD, gcrLCM :: GCR_ -> GCR_ -> GCR_
 gcrGCD POne _    = gcr1
 gcrGCD _    POne = gcr1

@@ -22,7 +22,7 @@ where
 import Math.NumberTheory.Canon.Internals
 import Math.NumberTheory.Canon.AurifCyclo (crCycloAurifApply, CycloMap)
 
--- | Functions for computing sums and differences.  
+-- | Functions for computing sums and differences
 crAdd, crSubtract, crAddR, crSubtractR :: CR_ -> CR_ -> CycloMap -> (CR_, CycloMap)
 crAdd       = crApplyAdtvOpt  True 
 crSubtract  = crApplyAdtvOpt  False
@@ -59,7 +59,7 @@ crApplyAdtvOptR b     x     y     m = (crDivRational n d, m')
                                             n        = crMult ngcd nf
                                             d        = crMult dx dy  
 
--- | crApplyAdtvOpt: Simplifies/Factorizes expressions x +/- y.
+-- | Simplify / Factorize expressions of the form: x +/- y.
 crApplyAdtvOpt :: Bool -> CR_ -> CR_ -> CycloMap -> (CR_, CycloMap)
 crApplyAdtvOpt _     x     PZero m = (x, m)
 crApplyAdtvOpt True  PZero y     m = (y, m)           -- True -> (+)
@@ -73,7 +73,7 @@ crApplyAdtvOpt b     x     y     m = (crMult gcd' r, m')
 logThreshold :: Double
 logThreshold = 10 * (log 10) -- 'n' digit number
 
--- | crApplyAdtvOptConv is setup to convert different cases in a standard manner.  All 8 combinations of signs and operators are covered here.
+-- | Convert different sign / operator cases in a standard manner.  All 8 combinations are covered here.
 {-
   p1 + p2 => p1 + p2,     p1 - p2 => p1 - p2
   p1 + n2 => p1 - p2,     p1 - n2 => p1 + p2
@@ -99,7 +99,7 @@ crApplyAdtvOptConv b x y m
           (c1, m1) = crCycloAurifApply b       ax ay g gi m
           (c2, m2) = crCycloAurifApply (not b) ax ay g gi m -- corresponds to "otherwise"
 
--- | Quot Rem function for Canon Rep.  Optimization: Check first if q is a multiple of r.  If so, we avoid the potentially expensive conversion.
+-- | Quot Rem function for CR_.  Optimization: Check first if q is a multiple of r.  If so, we avoid the potentially expensive conversion.
 crQuotRem :: CR_ -> CR_ -> CycloMap -> ((CR_, CR_), CycloMap)
 crQuotRem x y m = case (crDiv x y) of
                     Left  _        -> ((q,        md), m') 

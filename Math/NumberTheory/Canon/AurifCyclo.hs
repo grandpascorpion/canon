@@ -10,12 +10,12 @@
 {-# LANGUAGE PatternSynonyms, ViewPatterns #-}
 
 module Math.NumberTheory.Canon.AurifCyclo (
-  aurCandDec,     aurCandDecCr, 
-  aurDec,         aurDecCr,
+  aurCandDec,     
+  aurDec,         
   applyCycloPair, applyCycloPairWithMap,
   cyclo,          cycloWithMap,
   cycloDivSet,    cycloDivSetWithMap,
-  chineseAurif,   chineseAurifWithMap, chineseAurifCr,
+  chineseAurif,   chineseAurifWithMap, 
 
   crCycloAurifApply, applyCrCycloPair, divvy,
   CycloMap, fromCycloMap, fromCM, showCyclo, crCycloInitMap
@@ -64,7 +64,7 @@ crCycloAurifApply b x y g gi m
         cycA x' y' n  = (sort ia, m') -- sort the integers returned from low to high, should help if there are larger terms
                         where (ia, m') = applyCrCycloPair x' y' n m
         eA (a,mp)     = (foldr1 crMult $ map crFromI v, m') -- eA stands for "enriched apply"
-                        where (v, m')   = case aurCandDecU x y gi g b of
+                        where (v, m')   = case aurCandDecI x y gi g b of
                                             Nothing       -> auL a mp  -- can't do anything Brent Aurif-wise, try Chinese method
                                             Just (a1, a2) -> auL (divvy a a1 a2) mp -- meld in the 2 Aurif factors with input array
                               auL al ma = case c of -- aL stands for "augmented list)
@@ -84,22 +84,19 @@ http://maths-people.anu.edu.au/~brent/pd/rpb127.pdf
 http://maths-people.anu.edu.au/~brent/pd/rpb135.pdf
 -}
 
--- | Integer wrapper for aurCandDecCr
-aurCandDec :: Integer -> Integer -> Bool -> Maybe (Integer, Integer)
-aurCandDec xi yi b = aurCandDecCr (crFromI xi) (crFromI yi) b
-
 -- | This function checks if the input is a candidate for Aurifeuillian decomposition.
---   If so, split it into two and evaluate it.  Otherwise, return nothing.  
---   The code will "prep" the input params so they will be relatively prime.
-aurCandDecCr :: CR_ -> CR_ -> Bool -> Maybe (Integer, Integer)
-aurCandDecCr xp yp b = aurCandDecU x y n (crFromI n) b 
-                       where n      = gcd (crMaxRoot $ crAbs x) (crMaxRoot $ crAbs y)
-                             gxy    = crGCD xp yp 
-                             (x, y) = (crDivStrict xp gxy, crDivStrict yp gxy) -- this will fix the input to be relatively prime
+--   If so, split it into two and evaluate it.  Otherwise, return nothing.
+--   The code will "prep" the input params for the internal function so they will be relatively prime.
+aurCandDec :: Integer -> Integer -> Bool -> Maybe (Integer, Integer)
+aurCandDec xi yi b = f (crFromI xi) (crFromI yi)
+                     where f xp yp = aurCandDecI x y n (crFromI n) b 
+                                     where n      = gcd (crMaxRoot $ crAbs x) (crMaxRoot $ crAbs y)
+                                           gxy    = crGCD xp yp 
+                                           (x, y) = (crDivStrict xp gxy, crDivStrict yp gxy) -- this will fix the input to be relatively prime
 
--- U belows means unsafe.  Don't call this directly.  The function assumes that x and y are relatively prime.  Currently uses Brent logic only
-aurCandDecU :: CR_ -> CR_ -> Integer -> CR_ -> Bool -> Maybe (Integer, Integer)
-aurCandDecU x y n cr b| (nm4 == 1 && b) || (nm4 /= 1 && not b) ||
+-- Don't call this I(nternal) function directly.  The function assumes that x and y are relatively prime.  Currently uses Brent logic only.
+aurCandDecI :: CR_ -> CR_ -> Integer -> CR_ -> Bool -> Maybe (Integer, Integer)
+aurCandDecI x y n cr b| (nm4 == 1 && b) || (nm4 /= 1 && not b) ||
                         (xdg == x && ydg == y)  || (m /= 0)
                                         = Nothing -- 
                       | otherwise       = case aurDecI n' cr' of
@@ -110,7 +107,7 @@ aurCandDecU x y n cr b| (nm4 == 1 && b) || (nm4 /= 1 && not b) ||
                             -- this will only work when either x or y = 1 and not for any other divisor of g.  
                             -- If both terms are not 1, we just attempt an Aurif. decomp for n
   
-                            -- need to integrate chineseAurif, it does something different                          
+                            -- TODO: Need to integrate chineseAurif as it does something different                          
                             (n', cr') | x /= cr1 && y /= cr1 = (n, cr) 
                                       | otherwise            = (gcd1i, gcd1)
                                       where x1    = if y /= cr1 then y else x
@@ -153,10 +150,6 @@ aurCandDecU x y n cr b| (nm4 == 1 && b) || (nm4 /= 1 && not b) ||
 aurDec :: Integer -> Maybe (Array Integer Integer, Array Integer Integer)
 aurDec n | n <= 1    = error "aurifDecomp: n must be greater than 1"
          | otherwise = aurDecI n (crFromI n)
-
--- | CR_ wrapper for aurDec 
-aurDecCr :: CR_ -> Maybe (Array Integer Integer, Array Integer Integer)                
-aurDecCr cr = aurDec (crToI cr)
 
 -- | Internal Aurifeullian Decomposition Workhorse Function
 aurDecI :: Integer -> CR_ -> Maybe (Array Integer Integer, Array Integer Integer) 
@@ -249,7 +242,7 @@ divvy a x y = d (sortBy rev a) (abs x) (abs y)
     C(15) is a form of the last term where y = 1
     It's possible in some cases to do an additional Aurifeullian factorization (of the last term).   -}
 
--- | CycloPair: Pair of an Integer and its Corresponding Cyclotomic Polynomial
+-- | CycloPair: Pair of an Integer and its corresponding cyclotomic polynomial
 type CycloPair         = (Integer, Poly Float)
 
 -- | CycloMapInternal: Map internal to CycloMap newtype
@@ -360,7 +353,7 @@ crCycloRad cr m = case cmLookup cr m of
                                           f _        p' mp = (p', mp)
                         mf []     = error "Logic error: Blank list can't be passed to mf aka crCycloMemoFold" 
 
--- Return a pair of Integer and its Cyclotomic Polynomial while efficiently building up a cyc. poly. map
+-- | Return a pair of Integer and its cyclotomic polynomial while efficiently building up a map
 crCycloAll :: CR_ -> CycloMap -> (CycloPair, CycloMap)
 crCycloAll cr m | p == cr1     = case cmLookup cr m of 
                                    Nothing -> error "Logic error: Radical value not found for crCycloAll"

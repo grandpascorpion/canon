@@ -78,14 +78,14 @@ instance Integral SimpleCanon where
             
 instance Fractional SimpleCanon where
   fromRational (n :% d) | m == 0    = MakeSC $ crFromI q
-                        | otherwise = error "Modulus not zero.  Use Rational SimpleCanons for non-integers."
+                        | otherwise = error "Modulus not zero.  Use Rational SimpleCanons for non-Integers."
                         where (q, m) = quotRem n d
   (/) x y               = MakeSC $ crDivStrict (fromSC x) (fromSC y)
 
 instance Num SimpleCanon where
   fromInteger n = MakeSC $ crFromI n    -- to do: check where called?
-  x + y         = MakeSC $ fst $ crAdd      (fromSC x) (fromSC y) crCycloInitMap -- discard the map info
-  x - y         = MakeSC $ fst $ crSubtract (fromSC x) (fromSC y) crCycloInitMap -- discard the map info
+  x + y         = MakeSC $ fst $ crAdd      (fromSC x) (fromSC y) crCycloInitMap -- discard the map
+  x - y         = MakeSC $ fst $ crSubtract (fromSC x) (fromSC y) crCycloInitMap -- discard the map
   x * y         = MakeSC $ crMult     (fromSC x) (fromSC y)
   
   negate x      = MakeSC $ crNegate $ fromSC x

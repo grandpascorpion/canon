@@ -77,9 +77,9 @@ module Math.NumberTheory.Canon.Internals (
   pattern PIntNPos,
   pattern PIntPos,
 
-  -- functions deprecated from arithmoi that needed to be included here
+  -- Functions deprecated from arithmoi that needed to be included here
   totient,
-  pmI -- stands for powerModInteger
+  pmI -- Short for powerModInteger
 ) 
 where
 
@@ -100,7 +100,7 @@ where
    One               [] 
    
    Other Positive 
-   Numbers:          A set of (p,e) pairs where the p's are prime and in ascending order. 
+   Numbers:          A set of (p,e) pairs where the p(rime)s are in ascending order. 
                      For "integers",  the e(xponents) must be positive
                      For "rationals", the e(xponents) must not be zero
                      All "integers" are "rationals" but not vice-versa.
@@ -246,7 +246,7 @@ crFromI n = crFromInteger n
 
 crToInteger, crToI :: CR_ -> Integer
 
--- | Converts a canon rep back to an Integer.
+-- | Convert a canon rep back to an Integer.
 crToInteger POne                  = 1
 crToInteger PZero                 = 0
 crToInteger c | (head c) == creN1 = -1 * (crToInteger $ tail c)    -- negative number
@@ -290,7 +290,7 @@ crShow POne = show (1 :: Integer)
 crShow x    | null (tail x) = ceShow $ head x
             | otherwise     = concat $ intersperse " * " $ map ceShow x 
 
--- | Display a Canonical Rep rationally, as a quotient of its numerator and denominator.
+-- | Display a CR_ rationally, as a quotient of its numerator and denominator.
 crShowRational c | d == cr1  = crShow n
                  | otherwise = crShow n ++ "\n/\n" ++ crShow d
                  where (n, d) = crSplit c  
@@ -302,7 +302,7 @@ crNegate PZero            = cr0
 crNegate x | crNegative x = tail x 
            | otherwise    = creN1 : x 
 
--- | Take the Absolute Value of a CR_.
+-- | Take the absolute value of a CR_.
 crAbs x | crNegative x = tail x
         | otherwise    = x
 
@@ -353,7 +353,7 @@ divByZeroError   = "Division by zero error!"
 zeroDivZeroError = "Zero divided by zero is undefined!"
 negativeLogError = "The log of a negative number is undefined!"
 
--- | Strict division: Generates error if exact division is not possible.
+-- | Strict division: Generate error if exact division is not possible.
 crDivStrict :: CR_ -> CR_ -> CR_
 crDivStrict x y = case crDiv x y of
                     Left errorMsg  -> error errorMsg
@@ -518,10 +518,10 @@ crPrime, crHasSquare :: CR_ -> Bool
 crPrime PPrime = True
 crPrime _      = False
 
--- | Checks if a number has a squared (or higher) factor.
+-- | Check if a number has a squared (or higher) factor.
 crHasSquare    = any (\(_,e) -> e > 1) 
                     
--- | Divisor functions -- should be called with integral CRs (no negative exponents).
+-- | Divisor functions should be called with integral CRs (no negative exponents).
 crNumDivisors, crTau, crTotient, crPhi  :: CR_ -> Integer
 
 crNumDivisors cr = product $ map (\(_,e) -> 1 + e) cr -- does return 1 for cr1
@@ -529,7 +529,7 @@ crTau            = crNumDivisors
 crTotient     cr = product $ map (\(p,e) -> (p-1) * p^(e-1)) cr
 crPhi            = crTotient
 
--- | Computes the nth divisor. This is zero based. 
+-- | Compute the nth divisor. This is zero based. 
 --   Note: This is deterministic but it's not ordered by the value of the divisor.
 crNthDivisor :: Integer -> CR_ -> CR_
 crNthDivisor 0 _    = cr1
@@ -540,7 +540,7 @@ crNthDivisor n c    | m == 0    = r
                           r          = crNthDivisor (div n (ce + 1)) cs -- first param is the next n
                           m          = mod n (ce + 1)          
 
--- | Consider this to be an inverse of the crNthDivisor function.
+-- | Consider this to be the inverse of the crNthDivisor function.
 crWhichDivisor :: CR_ -> CR_ -> Integer
 crWhichDivisor d c | crPositive d == False ||
                      crPositive c == False = error "crWhichDivisor: Both params must be positive"
@@ -554,7 +554,7 @@ crWhichDivisor d c | crPositive d == False ||
                                                                                        where ((dp, de):ds)  = d'
                                                                                              ((cp, ce):cs)  = c'   
 
--- | Efficiently computes all of the divisors based on the canonical representation.
+-- | Efficiently compute all of the divisors based on the canonical representation.
 crDivisors :: CR_ -> [CR_]
 crDivisors c = foldr1 cartProd $ map pwrDivList c
                where cartProd xs ys   = [x ++ y | y <- ys, x <- xs]
