@@ -1,7 +1,8 @@
+0.1.0.2:
+    Bug fix for pattern PN1 in Internals.hs
 0.1.0.1:
     Improvements to documentation.
     Fix typos and word omissions.
     Remove unused / "unsafe" Cr functions from AurifCyclo.hs
-
 0.1.0.0:
     First release

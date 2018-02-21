@@ -143,7 +143,7 @@ pattern PZero     = [(0,1)]
 
 -- | Pattern to match the CR_ equivalent of -1
 pattern PN1 :: forall a a1. (Num a, Num a1, Eq a, Eq a1) => [(a1, a)]
-pattern PN1       = [(0,1)]
+pattern PN1       = [(-1,1)]
 
 -- | Pattern to match a badly formed zero, meaning it's an invalid CR_
 pattern PZeroBad :: forall t a. (Num a, Eq a) => [(a, t)]
