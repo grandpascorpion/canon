@@ -1,2 +1,7 @@
+0.1.0.1:
+    Improvements to documentation.
+    Fix typos and word omissions.
+    Remove unused / "unsafe" Cr functions from AurifCyclo.hs
+
 0.1.0.0:
     First release
