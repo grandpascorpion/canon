@@ -260,10 +260,11 @@ fromCycloMap       = fromCM
 crCycloInitMap :: CycloMap
 crCycloInitMap = MakeCM $ M.insert cr1 (1, poly LE ([-1.0, 1.0] :: [Float])) M.empty
 
--- Two internal functions for the map internals
+-- | Wrapper function to query map internals
 cmLookup :: CR_ -> CycloMap -> Maybe CycloPair 
 cmLookup c m = M.lookup c (fromCM m)
 
+-- Internal function for updating map internals
 cmInsert :: CR_ -> CycloPair -> CycloMap -> CycloMap
 cmInsert c p m = MakeCM $ M.insert c p (fromCM m)
 
