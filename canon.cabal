@@ -2,10 +2,11 @@
 --  see http://haskell.org/cabal/users-guide/
 
 name:                canon
-version:             0.1.0.2
+version:             0.1.0.3
 synopsis:            Massive Number Arithmetic
-description:         This library allows one to manipulate numbers of practically unlimited size by keeping them in factored "canonical" form.
-                     For manipulating sums and differences, there is additional code to factor expressions of special forms.
+description:         This library allows one to manipulate numbers of practically unlimited size by keeping them in factored "canonical" form, 
+                     where possible.  For manipulating sums and differences, there is additional code to factor expressions of special forms.
+                     Please refer to CanonManualTests.hs and the .odp presentation files for usage examples and background.
 
 homepage:            https://github.com/grandpascorpion/canon
 license:             MIT
@@ -28,8 +29,7 @@ library
     exposed-modules     : Math.NumberTheory.Canon
                           Math.NumberTheory.Canon.Simple
                           Math.NumberTheory.Canon.AurifCyclo
-                          Math.NumberTheory.Canon.Internals
---    other-modules       : Math.NumberTheory.Canon.Internals
+    other-modules       : Math.NumberTheory.Canon.Internals
                           Math.NumberTheory.Canon.Additive
 
     ghc-options         : -O2 -Wall

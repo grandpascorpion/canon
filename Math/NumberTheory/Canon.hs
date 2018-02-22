@@ -10,9 +10,7 @@
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, PatternSynonyms, ViewPatterns, RankNTypes #-}
 
 module Math.NumberTheory.Canon ( 
-  makeCanon, makeC,
-  canonToGCR, cToGCR,
-
+  Canon, makeCanon, BareStatus(..), CanonValueType(..), 
   cMult, cDiv, cAdd, cSubtract, cExp,
   cReciprocal,
   cGCD, cLCM, cMod, cOdd, cTotient, cPhi,
@@ -26,7 +24,13 @@ module Math.NumberTheory.Canon (
   cIsPrimeTower, cPrimeTowerLevel,
                                                
   cTetration, cPentation, cHexation, cHyperOp,
-  (>^), (<^), (%), (<^>), (<<^>>), (<<<^>>>)         
+  (>^), (<^), (<^>), (<<^>>), (<<<^>>>),
+
+  CanonElement, getBase, getExponent,
+  getBases, getExponents, getElements,
+  cNumDivisors, cTau, cDivisors, cNthDivisor, cWhichDivisor,
+
+  CycloMap, fromCycloMap, cmLookup, showCyclo, crCycloInitMap -- Exposes cyclotomic map-related functionality from AurifCyclo
 )
 where
 
@@ -35,30 +39,36 @@ import Data.List (intersperse)
 import GHC.Real (Ratio(..))
 import Math.NumberTheory.Canon.Internals
 import Math.NumberTheory.Canon.Additive
-import Math.NumberTheory.Canon.AurifCyclo (CycloMap, crCycloInitMap)
+import Math.NumberTheory.Canon.AurifCyclo
 import Math.NumberTheory.Canon.Simple (CanonConv(..))
 
--- | CanonValueType: 3 possibilities for this GADT.  Imaginary/complex numbers are not supported
+-- | CanonValueType: 3 possibilities for this GADT (integral, non-integral rational, irrational).  
+--   Imaginary/complex numbers are not supported
 data CanonValueType = IntegralC | NonIntRationalC | IrrationalC deriving (Eq, Ord, Show)
 
--- | GCR_ stands for Generalized Canonical Representation
-type GCR_  = [GCRE_]
+-- | This element is a base, exponent pair.  The base is an integer and is generally prime or 0, -1.
+--   The exponent is also a Canon (allowing for arbitrary nesting)
+--   A Canon conceptually consists of a list of these elements.  The first member of the pair will 
+--   be a Canon raised to the first power.  By doing this, we're allow for further generality
+--   in the definition of a Canon.
+type CanonElement = (Canon, Canon)
+
+-- | GCR_ stands for Generalized Canonical Representation.  This is internal to Canon.
+type GCR_         = [GCRE_]
+
 type GCRE_ = (Integer, Canon)
 
--- | Canon: GADT for either Bare or some variation of a canonical form.
+-- | Canon: GADT for either Bare (Integer) or some variation of a canonical form (see CanonValueType).
 data Canon = Bare Integer BareStatus | Canonical GCR_ CanonValueType 
 
 -- | BareStatus: A "Bare Simplified" number means a prime number, +/-1 or 0.  The code must set the flag properly
 --               A "Bare NotSimplified" number is an Integer that has not been checked (to see if it can be factored).
 data BareStatus = Simplified | NotSimplified deriving (Eq, Ord, Show)
 
-makeCanon, makeC, makeCanonFull, makeDefCanonForExpnt :: Integer -> Canon
+makeCanon, makeCanonFull, makeDefCanonForExpnt :: Integer -> Canon
 
 -- | Create a Canon from an Integer.  This may involve expensive factorization.
 makeCanon n = makeCanonI n False
-
--- | Shorthand for makeCanon
-makeC       = makeCanon
 
 -- | Make a Canon and attempt a full factorization
 makeCanonFull n = makeCanonI n True
@@ -179,7 +189,7 @@ cEq x                      (Bare y NotSimplified) | cValueType x /= IntegralC = 
 
 cEq (Canonical x a )       (Canonical y b)        = if a /= b then False else gcrEqCheck x y
 
--- | Check if a Canon is an odd Integer.  Note: If the Canon is not integral, return False 
+-- | Check if a Canon is an odd Integer.  Note: Return False if the Canon is not integral.  See CanonValueType for possible cases.
 cOdd :: Canon -> Bool
 cOdd (Bare x _)               = mod x 2 == 1
 cOdd (Canonical c IntegralC ) = gcrOdd c
@@ -214,7 +224,7 @@ cQuotRem x y m | cIntegral x && cIntegral y = ((gcrToC q', md'), m'')
                                       where gy       = cToGCR y
                                             -- ToDo: fix  (md, mm) = cModBAD x y m'  -- Better to compute quotient this way .. to take adv. of alg. forms
                                             md       = cMod x y
-                                            q        = gcrDivStrict (cToGCR d) gy  -- equivalent to: (x - x%y) / y.
+                                            q        = gcrDivStrict (cToGCR d) gy  -- equivalent to: (x - mod x y) / y.
                                             (d, m')  = cSubtract x md m
 
 -- | Mod function
@@ -251,7 +261,7 @@ cTotient c m | (not $ cIntegral c) || cNegative c = error "Not defined for non-i
                    f ((p,e):gs) prd m' = f gs wp mw 
                    -- f is equivalent to the crTotient function but with threading of CycloMap 
                    -- => product $ map (\(p,e) -> (p-1) * p^(e-1)) cr
-                                       where cp           = makeC p -- "Canon-ize" this.  Generally, this should be a prime already
+                                       where cp           = makeCanon p -- "Canon-ize" this.  Generally, this should be a prime already
                                              (pM1, mp)    = cSubtract cp c1 m'
                                              (eM1, me)    = cSubtract e c1 mp 
                                              (pxeM1, mpm) = cExp cp eM1 False me
@@ -280,11 +290,11 @@ cHexation  = cHyperOp 6
 
 -- | Generalized Hyperoperation Function (https://en.wikipedia.org/wiki/Hyperoperation)
 cHyperOp :: Integer -> Canon -> Integer -> CycloMap -> (Canon, CycloMap)
-cHyperOp n a b m | b < -1                       = error "Hyperoperations not defined when b < -1"
-                 | n < 0                        = error "Hyperoperations require the level n >= 0"
+cHyperOp n a b m | b < -1                           = error "Hyperoperations not defined when b < -1"
+                 | n < 0                            = error "Hyperoperations require the level n >= 0"
                  | a /= c0 && a /= c1 && 
-                   b > 1 && (a /= c2 && b == 2) = c n cb m
-                 | otherwise                    = (sp n a b, m)
+                   b > 1 && not (a /= c2 && b == 2) = c n cb m
+                 | otherwise                        = (sp n a b, m)
                  where cb = makeCanon b
                        -- Function for regular cases
                        c 1  b' m'  = cAdd a b' m'  -- addition
@@ -320,11 +330,6 @@ cHyperOp n a b m | b < -1                       = error "Hyperoperations not def
                        sp _ Pc1 _    = c1
                        sp _ a'  1    = a'
                        sp _ _   _    = error "Can't compute this hyperoperation.  b must be >= -1"                
-
-infixl 7 %
--- | Mod operator
-(%) :: (Integral a) => a -> a -> a
-n % m = mod n m 
 
 -- | Exponentation operator declaration
 infixr 9 <^   
@@ -421,7 +426,12 @@ cToD :: Canon -> Double
 cToD (Bare i _ )      = fromIntegral i
 cToD (Canonical c _ ) = gcrToD c 
 
--- | Multiply Function: Generally speaking, this will be much cheaper.
+-- | Multiply Function: Generally speaking, this will be much cheaper than addition/subtraction which requires factoring.
+--   You are usually just merging lists of prime, exponent pairs and adding exponents where common primes are found.
+--   This notion is the crux of the library.
+--
+--   Note: This can be used instead of the '*' operator if you want to maintain a CycloMap for performance
+--   reasons.
 cMult :: Canon -> Canon -> CycloMap -> (Canon, CycloMap) 
 cMult Pc0 _   m = (c0, m)
 cMult _   Pc0 m = (c0, m)
@@ -432,6 +442,8 @@ cMult x   y   m = (gcrToC g, m')
 
 -- | Addition and subtraction is generally much more expensive because it requires refactorization.
 --   There is logic to look for algebraic forms which can greatly reduce simplify factorization.
+--   Note: This can be used instead of the +/- operators if you want to maintain a CycloMap for performance
+--   reasons.
 cAdd, cSubtract :: Canon -> Canon -> CycloMap -> (Canon, CycloMap)
 cAdd      = cApplyAdtvOp True 
 cSubtract = cApplyAdtvOp False 
@@ -449,6 +461,8 @@ cApplyAdtvOp b     x   y   m = (gcd' * r, m')
                                      (c, m') = crApplyAdtvOptConv b (cToCR x') (cToCR y') m -- costly bit
 
 -- | Exponentiation: This does allow for negative exponentiation if the Bool flag is True.
+--   Note: This can be used instead of the exponentiation operator if you want to maintain a CycloMap for performance
+--   reasons.
 cExp :: Canon -> Canon -> Bool -> CycloMap -> (Canon, CycloMap)
 cExp c e b m | cNegative e && (not b) 
                          = error "Per param flag, negative exponentiation is not allowed here."
@@ -571,7 +585,7 @@ cPrimeTowerLevel (Canonical g IntegralC)  = case gcrPrimePower g of
                                               True  -> cPrimeTowerLevelI (snd $ head g) (fst $ head g) (1 :: Integer)
 cPrimeTowerLevel _                        = 0
 
--- | Internal workhorse function
+-- | Internal workhorse function to compute the height of a prime tower (e.g. 5^(5^7) => 3)
 cPrimeTowerLevelI :: Canon -> Integer -> Integer -> Integer
 cPrimeTowerLevelI (Bare b _ )             n l | b == n    = l + 1 
                                               | otherwise = 0
@@ -580,13 +594,12 @@ cPrimeTowerLevelI (Canonical g IntegralC) n l | gcrPrimePower g == False = 0
                                               | otherwise                = cPrimeTowerLevelI (snd $ head g) n (l+1)
 cPrimeTowerLevelI _                       _ _ = 0
 
--- | Functions to convert Canon to generalized canon rep
-canonToGCR, cToGCR :: Canon -> GCR_
-canonToGCR (Canonical x _) = x
-canonToGCR (Bare x NotSimplified) = canonToGCR $ makeCanon x -- ToDo: Thread in CycloMap?
-canonToGCR (Bare x Simplified)    | x == 1    = gcr1 
-                                  | otherwise = [(x, c1)]
-cToGCR = canonToGCR
+-- | Function to convert Canon to generalized canon rep
+cToGCR :: Canon -> GCR_
+cToGCR (Canonical x _) = x
+cToGCR (Bare x NotSimplified) = cToGCR $ makeCanon x -- ToDo: Thread in CycloMap?
+cToGCR (Bare x Simplified)    | x == 1    = gcr1 
+                              | otherwise = [(x, c1)]
 
 -- Warning: Don't call this for 0 or +/- 1.  The value type will not change by negating the value     
 gcrNegateCanonical :: GCR_ -> CanonValueType -> Canon    
@@ -800,6 +813,99 @@ getBareStatus n | n < -1              = NotSimplified
                 | n <= 1 || isPrime n = Simplified 
                 | otherwise           = NotSimplified
 
+-- | Return the base b from a Canon Element (equivalent to b^e)
+getBase :: CanonElement -> Canon
+getBase (b, _) = b
+
+-- | Return the exponent e from a Canon Element (equivalent to b^e)
+getExponent :: CanonElement -> Canon
+getExponent (_, e) = e
+
+-- | Return the list of bases from a Canon (conceptually of the form [b^e])>
+getBases :: Canon -> [Canon]
+getBases b@(Bare _ _)    = [b]
+getBases (Canonical g _) = map (getBase . convGCREToCE) g
+
+-- | Return the list of exponents from a Canon (conceptually of the form [b^e]).
+getExponents :: Canon -> [Canon]
+getExponents (Bare _ _)    = [c1] -- always just one
+getExponents (Canonical g _) = map (getExponent . convGCREToCE) g
+
+-- | Return the list of CanonElements from a Canon (conceptually of the form [b^e]).
+getElements:: Canon -> [CanonElement] 
+getElements b@(Bare _ _)    = [(b, c1)]
+getElements (Canonical g _) = map convGCREToCE g
+
+-- | Convert a generalized canon rep element to a CanonElement
+convGCREToCE :: GCRE_ -> CanonElement
+convGCREToCE (b, e) = (makeCanon b, e) -- ToDo: Optimize .. b is already known to be a prime here
+
+-- | Divisor functions should be called with integral Canons. Restricted to positive divisors. Returns Either String Canon
+cNumDivisors, cTau :: Canon -> Either String Canon 
+
+cNumDivisors (Bare x Simplified)     = if x == 0 then Left "Zero has an infinite number of divisors" 
+                                                 else Right (if x == 1 then c1 else c2)
+cNumDivisors (Bare _ _)              = Left "Bare number not simplified.  Can't compute number of divisors accurately."
+cNumDivisors (Canonical g IntegralC) = Right $ product $ map (\(_,e) -> 1 + e) $ gcrAbs g  --- ToDo: Optimize?
+cNumDivisors (Canonical _ _)         = Left "This can only used for integral numbers."
+cTau                                 = cNumDivisors
+
+-- | Compute the nth divisor of a Canon. It operates on the absolute value of the Canon and is zero based.
+--   Note: This is deterministic but it's not ordered by the value of the divisor.
+cNthDivisor :: Canon -> Canon -> Either String Canon
+cNthDivisor _ (Bare _ NotSimplified)                                    = Left "cNthDivisor: Bare integer has not been simplified."
+cNthDivisor n c | cNegative n || not (cIntegral n) || not (cIntegral c) = Left "cNthDivisor: Both n and c must be integral.  n must be >= 0" 
+                | otherwise                                             = nth (cAbs c)
+                where nth Pc0 = Right n -- Zero has an infinite set of divisors.  The nth divisor is just n as a Canon
+                      nth cn  = case f (cAbs n) (cToGCR cn) of
+                                  Right r -> Right $ gcrToC r
+                                  Left e  -> Left e
+                                where f Pc0 _   = Right gcr1
+                                      f _   Pg1 = Left "cNthDivisor: Bad dividend number requested."
+                                      f n'  c'  = case f (div n' (e + 1)) cs of     -- First param is the next n
+                                                    Right r -> Right $ if m == c0 then r else ((b,m):r)
+                                                    e'      -> e' -- Return error message  
+                                                  where (b,e):cs = c'   
+                                                        m        = mod n' (e + 1)
+
+-- | Consider this to be the inverse of the cNthDivisor function.  This function ignores signs
+--   but both parameters must be integral.
+cWhichDivisor :: Canon -> Canon -> Either String Canon
+cWhichDivisor _ (Bare _ NotSimplified)                     = Left "cWhichDivisor: Bare integer has not been simplified." 
+cWhichDivisor d c | not (cIntegral d) || not (cIntegral c) = Left "cWhichDivisor: Both params must be integral"
+                  | otherwise                              = case f (cToGCR $ cAbs d) (cToGCR $ cAbs c) of
+                                                               Right r -> Right $ gcrToC r
+                                                               Left e  -> Left e
+                  where err       = Left "cWhichDivisor: Not a valid divisor"
+                        f :: GCR_ -> GCR_ -> Either String GCR_
+                        f Pg1 _   = Right gcr0 
+                        f _   Pg1 = err
+                        f d'  c'  | dp < cp  ||
+                                    (dp == cp && de > ce) = err
+                                  | dp == cp              = case f ds cs of 
+                                                              Right r -> Right $ cToGCR $ fst $ cAdd de (gcrToC p1) cm'' -- discard cycloMap
+                                                                         where (p1, cm'') = gcrMult s1g r cm'
+                                                              Left e  -> Left e
+                                  | otherwise             = case f d' cs of 
+                                                              Right r -> Right $ fst $ gcrMult s1g r cm' -- discard cycloMap
+                                                              Left e  -> Left e 
+                                  where ((dp, de):ds) = d'
+                                        ((cp, ce):cs) = c'
+                                        (s1, cm')     = cAdd ce c1 crCycloInitMap 
+                                        s1g           = cToGCR s1
+
+-- | Efficiently compute all of the divisors based on the canonical representation.
+-- | Returns Either an error message or a list of Canons.
+cDivisors :: Canon -> Either String [Canon]
+cDivisors (Bare x Simplified)     = if x == 0 then Left "Zero has an infinite number of divisors"
+                                              else (if x == 1 then Right [c1]
+                                                              else Right [c1, makeCanon x])
+cDivisors (Bare _ _)              = Left "Bare number not simplified.  Can't compute number of divisors accurately."
+cDivisors (Canonical g IntegralC) = Right $ map gcrToC $ foldr1 cartProd $ map pwrDivList g
+                                    where cartProd xs ys   = [x ++ y | y <- ys, x <- xs]
+                                          pwrDivList (n,e) = [if y == 0 then gcr1 else [(n, makeCanon y)] | y <- [0 .. cToI e]]
+cDivisors (Canonical _ _)         = Left "This can only used for integral numbers."
+
 -- | Instance of CanonConv class 
 instance CanonConv Canon where
   toSC c = toSC $ cToCR c
@@ -824,6 +930,10 @@ pattern PgNeg <- ((-1, Bare 1 _):_)
 -- | Pattern for "generalized" zero
 pattern Pg0 :: forall a. (Num a, Eq a) => [(a, Canon)]
 pattern Pg0 <- [(0, Bare 1 _)]  -- internal pattern for zero
+
+-- | Pattern for "generalized" 1
+pattern Pg1 :: forall t. [t]
+pattern Pg1 = []
 
 -- | Patterns for 0 and 1
 pattern Pc0 :: Canon
@@ -854,8 +964,8 @@ cModBAD c m cm | cIntegral c && cIntegral m = f c m cm
                           | (not cn) && (not mn) &&
                             ca < ma          = (ca, cm')
                           | (cn && not mn) ||
-                            (mn && not cn) = ((cSignum m') * (makeC $ maI - mrm), cmm) -- (m)ixed sign: TODO: CycloMap threading
-                          | otherwise        = (makeC io, mo)
+                            (mn && not cn) = ((cSignum m') * (makeCanon $ maI - mrm), cmm) -- (m)ixed sign: TODO: CycloMap threading
+                          | otherwise        = (makeCanon io, mo)
                           where (cn, mn)     = (cNegative c', cNegative m')
                                 (ca, ma)     = (cAbs c', cAbs m')
                                 (mrn, cmn)   = f ca ma cm'

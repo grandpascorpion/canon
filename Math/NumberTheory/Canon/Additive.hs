@@ -5,7 +5,7 @@
 -- Maintainer:  Frederick Schneider <frederick.schneider2011@gmail.com>
 -- Stability:   Provisional
 --
--- Mostly functions for the addition and subtraction of CRs (Canonical Representations of numbers)
+-- Internal module: Mostly functions for the addition and subtraction of CRs (Canonical Representations of numbers)
 
 module Math.NumberTheory.Canon.Additive (
   crAdd,

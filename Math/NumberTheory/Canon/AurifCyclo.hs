@@ -18,7 +18,7 @@ module Math.NumberTheory.Canon.AurifCyclo (
   chineseAurif,   chineseAurifWithMap, 
 
   crCycloAurifApply, applyCrCycloPair, divvy,
-  CycloMap, fromCycloMap, fromCM, showCyclo, crCycloInitMap
+  CycloMap, fromCycloMap, cmLookup, showCyclo, crCycloInitMap
 )
 where
 

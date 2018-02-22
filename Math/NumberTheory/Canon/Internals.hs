@@ -6,7 +6,7 @@
 -- Stability:   Provisional
 --
 -- This module defines the internal canonical representation of numbers (CR_), a product of pairs (prime and exponent). 
--- It's not meant to be called directly.
+-- PLEASE NOTE: It's not meant to be called directly.  The Canon and SimpleCanon modules should be used instead.
 
 {-# LANGUAGE PatternSynonyms, ViewPatterns, ScopedTypeVariables, DataKinds, RankNTypes #-}
 

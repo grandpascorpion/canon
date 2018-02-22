@@ -1,8 +1,37 @@
+0.1.0.3:
+    The Internals.hs and Additive.hs modules are no longer exposed.
+
+    Various enhancements to documentation.
+
+    Additions to Math.NumberTheory/Canon.hs API   ( (*) means it had previously existed in some form. )
+    -------------------------------------------
+        Canon(*), CanonElement, BareStatus(*), CanonValueType(*):  Types exposed to different degrees
+        CycloMap, fromCycloMap, cmLookup, showCyclo, crCycloInitMap: Exposes cyclotomic map-related functionality from AurifCyclo.
+
+        New divisor-related functions:
+        cNumDivisors / cTau, cDivisors, cNthDivisor, cWhichDivisor
+
+        New "reflection" functions:
+        getBase, getExponent, getBases, getExponents, getElements
+  
+    Removals from Math.NumberTheory.Canon API
+    -----------------------------------------
+        makeC: Removed from code as well 
+        (%):  Removed from code as well.  Mod operator was redundant.
+        canonToGCR, cToGCR: Internal functions that should not been exposed.  canonToGCR was removed from the code itself
+
+    Bug fix:
+    --------
+        cHyperOp : This did not work for the general case.  In the next larger release, this function will be enhanced
+        and appropriate tests will be added.
+
 0.1.0.2:
     Bug fix for pattern PN1 in Internals.hs
+
 0.1.0.1:
     Improvements to documentation.
     Fix typos and word omissions.
     Remove unused / "unsafe" Cr functions from AurifCyclo.hs
+
 0.1.0.0:
     First release
