@@ -30,7 +30,7 @@ module Math.NumberTheory.Canon (
   getBases, getExponents, getElements,
   cNumDivisors, cTau, cDivisors, cNthDivisor, cWhichDivisor,
 
-  CycloMap, fromCycloMap, cmLookup, showCyclo, crCycloInitMap -- Exposes cyclotomic map-related functionality from AurifCyclo
+  CycloMap, getIntegerBasedCycloMap, showCyclo, crCycloInitMap -- Exposes cyclotomic map-related functionality from AurifCyclo
 )
 where
 

@@ -18,7 +18,7 @@ module Math.NumberTheory.Canon.AurifCyclo (
   chineseAurif,   chineseAurifWithMap, 
 
   crCycloAurifApply, applyCrCycloPair, divvy,
-  CycloMap, fromCycloMap, cmLookup, showCyclo, crCycloInitMap
+  CycloMap, getIntegerBasedCycloMap, showCyclo, crCycloInitMap
 )
 where
 
@@ -252,11 +252,14 @@ type CycloMapInternal  = M.Map CR_ CycloPair
 newtype CycloMap       = MakeCM CycloMapInternal deriving (Eq, Show)
 
 -- | Unwrap the CycloMap newtype.
-fromCM, fromCycloMap :: CycloMap -> CycloMapInternal
+fromCM :: CycloMap -> CycloMapInternal
 fromCM (MakeCM cm) = cm
-fromCycloMap       = fromCM
 
--- | This is an initial map with the cyclotomic polynomials for 1 and 2.
+-- | Unwrap the CycloMap and convert the internal canon rep keys to Integers, returning a "raw" map
+getIntegerBasedCycloMap :: CycloMap -> M.Map Integer CycloPair
+getIntegerBasedCycloMap cm = M.mapKeys crToI (fromCM cm)
+
+-- | This is an initial map with the cyclotomic polynomials for 1.
 crCycloInitMap :: CycloMap
 crCycloInitMap = MakeCM $ M.insert cr1 (1, poly LE ([-1.0, 1.0] :: [Float])) M.empty
 

@@ -1,3 +1,9 @@
+0.1.0.4:
+    AurifCyclo.hs: Remove fromCycloMap, cmLookup from API and remove fromCycloMap function.
+                   Add exposed function getIntegerCycloMap.
+                   Correct comment for crCycloInitMap                 
+    Canon.hs: API change: Update set of functions exposed from AurifCyclo (in accordance with the above).
+
 0.1.0.3:
     The Internals.hs and Additive.hs modules are no longer exposed.
 
