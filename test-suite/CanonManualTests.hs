@@ -1,15 +1,12 @@
 -- |
 -- Module:      Math.NumberTheory.CanonTests
--- Copyright:   (c) 2018 Andrew Lelechenko
+-- Copyright:   (c) 2018 Frederick Schneider
 -- Licence:     MIT
 -- Maintainer:  Frederick Schneider <frederick.schneider2011@gmail.com> 
 -- Stability:   Provisional
 --
 -- Tests for Math.NumberTheory.Canon, etc
 --
-
-{-# OPTIONS_GHC -fno-warn-type-defaults #-}
-
 import Math.NumberTheory.Canon
 import Math.NumberTheory.Canon.AurifCyclo
 import Data.Array (array)
@@ -26,7 +23,7 @@ divvyTest = ans == divvy a x y
                   y   = 50031544711579219
                   ans = [765980456641,81365467681,374857981681,301,2269,31,271,547,61,7,4]
 
-aCaDTest = r == aurCandDec (2^58) 1 True
+aCaDTest = r == aurCandDec ((2 :: Integer) ^ (58 :: Integer)) 1 True
            where r = Just (536838145,536903681)
 
 aDTest = r == aurDec 5
@@ -35,7 +32,8 @@ aDTest = r == aurDec 5
 --chineseAurif: Any non-zero multiple of (q^2m * p) ^ (p * k) + (r^2n)^(p * k)  where k is odd pos, m, n > 0
 -- q and r do not both equal 1
 
-cATest = r == chineseAurif (44^253) 1 True -- Equivalent to 44^253 + 1.  Should these two factors below.  Example from Sichuan 5 paper
+cATest = r == chineseAurif ((44 :: Integer) ^ (253 :: Integer)) 1 True 
+              -- The above is equivalent to 44^253 + 1.  Should equal these two factors below.  Example from Sichuan 5 paper
               where r = Just (
                         3708082114051284931014527275382936962949050019900548504948093002539948192457694962513241254988377338102340862648630965276420678480576906389289483833735873261700512602622143146599971,
                         10004590597907985573943582945748620748239251502916976018978239877682278432398712396908419662400063010898795149152694380672517014008143612228221361453877714927361019333917217066917231
@@ -66,14 +64,14 @@ oddExpAur p em = aurCandDec (p^(em*p)) 1 True
 evenExpAur p em = aurCandDec (p^(em*p)) 1 False
 -}
 
-canonBasicProperties :: Int -> [(Int, String)]
+canonBasicProperties :: Integer -> [(Integer, String)]
 canonBasicProperties m | m <= 0    = error "Positive ints only"
                        | otherwise = formatTestOutput tests
                        where tests = [mc * rc == c1,
                                       mc / mc == c1,
-                                      (toInteger $ mc - mc) == 0,
+                                      toInteger mc - toInteger mc == 0,
                                       mc + mc == mc * 2,
-                                      mc ^ 2  == mc * mc,
+                                      mc <^ 2 == mc * mc,
 
                                       mc + c1 > mc,
                                       mc - 1 < mc,
@@ -83,24 +81,23 @@ canonBasicProperties m | m <= 0    = error "Positive ints only"
 
                                       signum mc == c1,
                                       signum nmc == negate c1,
-                                      toInteger mc == toInteger m, -- undo the conversion
+                                      toInteger mc == m, -- undo the conversion
                                       cNegative nmc && cPositive mc,
                                       cIntegral mc && cIntegral nmc,
 
-                                      --XXXX cIrrational sr && 
-                                      --XXXX sr <^ mp1 == c1 &&
+                                      cIrrational sr &&  
+                                      sr <^ mc == mc &&
                                       oc /= ec && (oc || ec) 
                                      ] 
-                             mc  = makeCanon $ toInteger $ m
+                             mc  = makeCanon m
                              rc  = cReciprocal mc 
                              nmc = negate mc
-                             -- mp1 = mc + c1
-                             -- sr  = mp1 >^ mp1 -- take the xth root of x (x is > 1).  Must be irrational
-                             oc  = cOdd mc
-                             ec  = cOdd $ mc + c1 -- even check
-                             c1  = makeCanon 1
+                             mp1 = mc + c1 
+                             sr  = mc <^ rc -- take the mth root of m (m is > 1).  Must be irrational
+                             oc  = cOdd mc  -- either oc or ec must be odd
+                             ec  = cOdd mp1 
 
-canonBasicProperties2 :: Int -> Int -> [(Int, String)]
+canonBasicProperties2 :: Integer -> Integer -> [(Integer, String)]
 canonBasicProperties2 m n | m <= 0 || n <= 0 = error "m and n must be positive"
                           | otherwise        = formatTestOutput tests
                           where 
@@ -109,27 +106,35 @@ canonBasicProperties2 m n | m <= 0 || n <= 0 = error "m and n must be positive"
                                      mc == nc >^ mxn,  -- test the root operator
                                      r == mod mc nc
                                     ]
-                            mc    = makeCanon $ toInteger m
-                            nc    = makeCanon $ toInteger n
-                            g     = makeCanon $ toInteger $ gcd m n
+                            mc    = makeCanon m
+                            nc    = makeCanon n
+                            g     = makeCanon $ gcd m n
                             (q,r) = quotRem mc nc
                             mxn   = mc <^ nc -- exponentiation
 
-formatTestOutput :: [Bool] -> [(Int, String)]
+formatTestOutput :: [Bool] -> [(Integer, String)]
 formatTestOutput tests = zip [1..] $ map (\b -> if b then trueS else falseS) tests
 
-main :: IO ()
-main = forever $ do
-  print "Canon Basic Properties (Enter 1 param): " 
+inputLoop :: IO ()
+inputLoop = forever $ do
+  print "Canon Basic Properties (Enter 1 param): "
   p <- getLine
-  print $ canonBasicProperties (read p :: Int) 
-  print ""
-  print "Canon Basic Properties (Enter 2 params, one each line): "
+  print $ canonBasicProperties (read p :: Integer)
+  print "" 
+  print "Canon Basic Properties (Enter 2 params, ONE FOR EACH LINE): "
   p1 <- getLine
   p2 <- getLine
-  print $ canonBasicProperties2 (read p1 :: Int) (read p2 :: Int)
-  print ""
+  print $ canonBasicProperties2 (read p1 :: Integer) (read p2 :: Integer)
+  print "" 
+  print "Restarting input loop ..."
+  print "" 
+  print "" 
+
+main :: IO ()
+main = do
+  print "" 
   print "Canon Specific Tests (0 params): "
   print $ formatTestOutput [divvyTest, aCaDTest, aDTest, cATest, cATestM, aCPTest]
   print ""
+  inputLoop
 

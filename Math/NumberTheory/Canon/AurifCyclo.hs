@@ -1,8 +1,8 @@
 -- |
 -- Module:      Math.NumberTheory.Canon.AurifCyclo
--- Copyright:   (c) 2015-2018 Frederick Schneider
+-- Copyright:   (c) 2015-2019 Frederick Schneider
 -- Licence:     MIT
--- Maintainer:  Frederick Schneider <frederick.schneider2011@gmail.com>
+-- Maintainer:  Frederick Schneider <fws.nyc@gmail.com>
 -- Stability:   Provisional
 --
 -- Aurifeullian and Cyclotomic factorization method functions.
@@ -18,7 +18,8 @@ module Math.NumberTheory.Canon.AurifCyclo (
   chineseAurif,   chineseAurifWithMap, 
 
   crCycloAurifApply, applyCrCycloPair, divvy,
-  CycloMap, getIntegerBasedCycloMap, showCyclo, crCycloInitMap
+  CycloMap, getIntegerBasedCycloMap, showCyclo, crCycloInitMap,
+  multPoly, divPoly, addPoly
 )
 where
 
@@ -26,13 +27,12 @@ import Math.NumberTheory.Canon.Internals
 import Math.NumberTheory.Moduli.Jacobi (JacobiSymbol(..), jacobi)
 import Data.Array (array, (!), Array(), elems) -- to do: convert to unboxed? https://wiki.haskell.org/Arrays
 import GHC.Real (numerator, denominator)
-import Math.Polynomial( Poly(), poly, multPoly, quotPoly, Endianness(..), polyCoeffs)
 import Data.List (sort, sortBy, (\\))
 import qualified Data.Map as M
 
 -- CR_ Rep of 2
 cr2 :: CR_
-cr2 = crFromI 2
+cr2 = fst $ crFromI 2
 
 -- | This function checks if the inputs along with operator flag have a cyclotomic or Aurifeuillian form to greatly simplify factoring.
 --   If they do not, potentially much more expesive simple factorization is used via crSimpleApply.
@@ -49,7 +49,7 @@ crCycloAurifApply b x y g gi m
    -- Factorize x^n + y^n using cyclotomic polynomials (if n = 2^x*m where x >= 0 and m > 2)
   | b && not gpwr2   = eA (cycA (oddRoot x) (-1 * oddRoot y) odd') 
 
-  | otherwise        = (crSimpleApply op x y, m)
+  | otherwise        = (fst $ crSimpleApply op x y, m)
   where op            = if b then (+) else (-)
         ((gp, _):gs)  = g
         gpwr2         = gp == 2 && gs == []                      
@@ -63,7 +63,9 @@ crCycloAurifApply b x y g gi m
 
         cycA x' y' n  = (sort ia, m') -- sort the integers returned from low to high, should help if there are larger terms
                         where (ia, m') = applyCrCycloPair x' y' n m
-        eA (a,mp)     = (foldr1 crMult $ map crFromI v, m') -- eA stands for "enriched apply"
+
+                        -- eA stands for "enriched apply", v unlike to exceed factor cutoff
+        eA (a,mp)     = (foldr1 crMult $ map (\v' -> fst $ crFromI v') v, m') 
                         where (v, m')   = case aurCandDecI x y gi g b of
                                             Nothing       -> auL a mp  -- can't do anything Brent Aurif-wise, try Chinese method
                                             Just (a1, a2) -> auL (divvy a a1 a2) mp -- meld in the 2 Aurif factors with input array
@@ -87,12 +89,18 @@ http://maths-people.anu.edu.au/~brent/pd/rpb135.pdf
 -- | This function checks if the input is a candidate for Aurifeuillian decomposition.
 --   If so, split it into two and evaluate it.  Otherwise, return nothing.
 --   The code will "prep" the input params for the internal function so they will be relatively prime.
+--   Possible solutions:  Non-zero multiples of xi and yi (where xi and yi are relatively prime and of the form
+--                        xi = a^(a*b), yi = 1 where a and b are positive integers and b is odd. (xi and y1 may be interchanged)
+--                        If a is even, we will find factors of a^(a*b) + 1.  The bool flag must be True
+--                        If a is odd,  we will find factors of a^(a*b) - 1.  The bool flag must be False 
+--
 aurCandDec :: Integer -> Integer -> Bool -> Maybe (Integer, Integer)
-aurCandDec xi yi b = f (crFromI xi) (crFromI yi)
-                     where f xp yp = aurCandDecI x y n (crFromI n) b 
+aurCandDec xi yi b = f (fst $ crFromI xi) (fst $ crFromI yi)
+                     where f xp yp = aurCandDecI x y n (fst $ crFromI n) b 
                                      where n      = gcd (crMaxRoot $ crAbs x) (crMaxRoot $ crAbs y)
                                            gxy    = crGCD xp yp 
                                            (x, y) = (crDivStrict xp gxy, crDivStrict yp gxy) -- this will fix the input to be relatively prime
+-- toDo: incorporate the factorization status when determining the correct gcd.  
 
 -- Don't call this I(nternal) function directly.  The function assumes that x and y are relatively prime.  Currently uses Brent logic only.
 aurCandDecI :: CR_ -> CR_ -> Integer -> CR_ -> Bool -> Maybe (Integer, Integer)
@@ -149,7 +157,7 @@ aurCandDecI x y n cr b| (nm4 == 1 && b) || (nm4 /= 1 && not b) ||
 --   An illogical n (n <= 1) will generate an error.
 aurDec :: Integer -> Maybe (Array Integer Integer, Array Integer Integer)
 aurDec n | n <= 1    = error "aurifDecomp: n must be greater than 1"
-         | otherwise = aurDecI n (crFromI n)
+         | otherwise = aurDecI n (fst $ crFromI n) -- no concern about factorization cutoff here
 
 -- | Internal Aurifeullian Decomposition Workhorse Function
 aurDecI :: Integer -> CR_ -> Maybe (Array Integer Integer, Array Integer Integer) 
@@ -171,12 +179,14 @@ aurDecI n cr | crHasSquare cr || n < 2 || n' < 2
                    q   = array (1, d) ([(i, f i) | i <- [1..d]])  
                          where f i  | mod i 2 == 1 = convJacobi $ jacobi n i
                                     | otherwise    = eQ
-                                    where eQ       = moeb (crFromI $ div n' g) * (totient g) * (cos' $ (n-1)*i)                     
+                                    where eQ       | ff == True = moeb cr' * (totient g) * (cos' $ (n-1)*i)                     
+                                                   | otherwise  = error "Moebius fcn can't be called if number not totally factored" 
+                                          (cr', ff)= crFromI $ div n' g
                                           g        = gcd n' i                                                                
 
                                           -- moebius fcn: 0 if has square, otherwise based on number of distinct prime factors
-                                          moeb cr' | crHasSquare cr'         = 0 
-                                                   | mod (length cr') 2 == 1 = -1 
+                                          moeb crm | crHasSquare crm         = 0 
+                                                   | mod (length crm) 2 == 1 = -1 
                                                    | otherwise               = 1
 
                                           cos' c   | m8 == 2 || m8 == 6 = 0   -- "cosine" function
@@ -242,8 +252,10 @@ divvy a x y = d (sortBy rev a) (abs x) (abs y)
     C(15) is a form of the last term where y = 1
     It's possible in some cases to do an additional Aurifeullian factorization (of the last term).   -}
 
+type Poly = [Integer] -- look into optimizing at a later date
+
 -- | CycloPair: Pair of an Integer and its corresponding cyclotomic polynomial
-type CycloPair         = (Integer, Poly Float)
+type CycloPair         = (Integer, Poly)
 
 -- | CycloMapInternal: Map internal to CycloMap newtype
 type CycloMapInternal  = M.Map CR_ CycloPair
@@ -261,7 +273,7 @@ getIntegerBasedCycloMap cm = M.mapKeys crToI (fromCM cm)
 
 -- | This is an initial map with the cyclotomic polynomials for 1.
 crCycloInitMap :: CycloMap
-crCycloInitMap = MakeCM $ M.insert cr1 (1, poly LE ([-1.0, 1.0] :: [Float])) M.empty
+crCycloInitMap = MakeCM $ M.insert cr1 (1, gen_xNm1 1) M.empty
 
 -- | Wrapper function to query map internals
 cmLookup :: CR_ -> CycloMap -> Maybe CycloPair 
@@ -279,19 +291,19 @@ cmInsert c p m = MakeCM $ M.insert c p (fromCM m)
 
 -- | Integer wrapper for crCyclo with default CycloMap parameter
 cyclo :: Integer -> (CycloPair, CycloMap)
-cyclo n = crCyclo (crFromI n) crCycloInitMap
+cyclo n = crCyclo (fst $ crFromI n) crCycloInitMap -- no concern over factorization cutoff here
 
 -- | Integer wrapper for crCyclo 
 cycloWithMap :: Integer -> CycloMap -> (CycloPair, CycloMap)
-cycloWithMap n m = crCyclo (crFromI n) m
+cycloWithMap n m = crCyclo (fst $ crFromI n) m -- no concern over factorization cutoff here
 
 -- | Integer wrapper for crCycloDivSet with default CycloMap parameter
 cycloDivSet :: Integer -> CycloMap
-cycloDivSet n = fst $ crCycloDivSet (crFromI n) crCycloInitMap
+cycloDivSet n = fst $ crCycloDivSet (fst $ crFromI n) crCycloInitMap -- no concern over factorization cutoff here
 
 -- | Integer wrapper for crCycloDivSet
 cycloDivSetWithMap :: Integer -> CycloMap -> (CycloMap, CycloMap)
-cycloDivSetWithMap n m  = crCycloDivSet (crFromI n) m
+cycloDivSetWithMap n m  = crCycloDivSet (fst $ crFromI n) m -- no concern over factorization cutoff here
 
 -- | Return pair of expon. multiplier and radical's polynomial along with working cyclotomic map.
 crCyclo :: CR_ -> CycloMap -> (CycloPair, CycloMap)
@@ -342,12 +354,12 @@ crCycloRad cr m = case cmLookup cr m of
                                  -- for primes, because the tail of the cr is [] meaning only one prime factor
                                  r          = fromInteger $ crToI $ crRadical cr  
                                               -- ToDo: Optimize cycpr to be quotient of (r^n -1)/(r-1) when r is a big prime  
-                                 cycpr      = (1, poly LE (replicate r 1.0)) --prime : ToDo: Optimize this to be quotient when a
+                                 cycpr      = genPrimePoly r
                                  -- for composites
                                  -- Create polynomial of the form : x^n -1
-                                 xNm1       = poly LE ( (-1.0:(replicate (r-1) 0.0) ++ [1.0]) :: [Float] )
+                                 xNm1       = gen_xNm1 r
                                  (cPrd, mp) = mf (init $ crDivisors cr)
-                                 cyc_n      = (1, quotPoly xNm1 cPrd)
+                                 cyc_n      = (1, divPoly xNm1 cPrd)
 
                         -- mf (Memo Fold) takes a list of divisors and returns the pair: (cyclotomic product, memoized map)
                         mf (n:ns) = f ns p m' 
@@ -386,11 +398,10 @@ applyCrCycloPairI l r cr cds           = map applyPoly cds
                        pA v            = a where a = array (0,nd) ([(0,1)] ++ [(i, v*a!(i-1)) | i <- [1..nd]]) -- array of powers
                        lpa             = pA l
                        rpa             = pA r
-                       applyPoly (m,p) = foldr1 (+) (map f $ zip fmtdCy [0..])
+                       applyPoly (m,p) = foldr1 (+) (map f $ zip p [0..])
                                          where f (a, b) | a == 0    = 0
                                                         | otherwise = a * lpa!(m*b) * rpa!(m*(maxExp - b))
-                                               fmtdCy   = map ceiling $ polyCoeffs LE p -- format poly from mult poly pair
-                                               maxExp   = toInteger $ length fmtdCy - 1
+                                               maxExp   = toInteger $ length p - 1
 
 -- | Wraps applyCycloPairWithMap with default CycloMap argument.
 applyCycloPair :: Integer -> Integer -> Integer -> [Integer]
@@ -398,11 +409,11 @@ applyCycloPair x y e = fst $ applyCycloPairWithMap x y e crCycloInitMap
 
 -- | This will use cyclotomic polynomial methods to factor x^e - b^e.
 applyCycloPairWithMap :: Integer -> Integer -> Integer -> CycloMap -> ([Integer], CycloMap)                  
-applyCycloPairWithMap  x y e m = applyCrCycloPair x y (crFromI e) m
+applyCycloPairWithMap  x y e m = applyCrCycloPair x y (fst $ crFromI e) m -- no concern over factorization cutoff here
 
 -- | This will display the cyclotomic polynomials for a CR.
 showCyclo :: CR_ -> CycloMap -> [Char]
-showCyclo n m = p $ map (\x -> (ceiling x) :: Integer) $ polyCoeffs LE (snd $ fst $ crCyclo n m)
+showCyclo n m = p $ snd $ fst $ crCyclo n m 
                 where p  (c:cs)   = show c ++ (p' cs (1 :: Int)) -- "LE" endianness is assumed here
                       p  _        = []
                       p' (c:cs) s | c == 0    = r
@@ -422,13 +433,30 @@ chineseAurif x y b = fst $ chineseAurifWithMap x y b crCycloInitMap
 
 -- | Integer wrapper for chineseAurifCr
 chineseAurifWithMap :: Integer -> Integer -> Bool -> CycloMap -> (Maybe (Integer, Integer), CycloMap)
-chineseAurifWithMap x y b m = chineseAurifCr (crFromI x) (crFromI y) b m
+chineseAurifWithMap x y b m = chineseAurifCr (fst $ crFromI x) (fst $ crFromI y) b m 
+-- practically speaking, factor cutoff is a non-issue
 
 -- The source for this algorithm is the paper by Sun Qi, Ren Debin, Hong Shaofang, Yuan Pingzhi and Han Qing
 -- http://www.jams.or.jp/scm/contents/Vol-2-3/2-3-16.pdf (The formula at 2.7 there is implemented below)
 -- This will handle a subset of the cases that the main Aurif. routines handle
 
 -- | This function reduces the two CR parameters by gcd before calling an internal function to find a "Chinese" Aurifeullian factorization.
+--   Solutions will be found for any non-zero multiple of xp yp b (where xp and yp are relatively prime)
+--   where xp is of the form: (q^2m * p) ^ (p * k) 
+--         yp is of the form: (r^2n) ^ (p * k) 
+--         (That said, the order of xp and yp can be switched and the same result or non-result would be obtained.)
+--         op = + if p == 3 mod 4 and op 
+--         op = - if p == 1 mod 4
+--         For xp and yp, all of variables (q, m, p, k, r, n) are (CRs equivalent to) positive integers.  
+--         p and k are also odd. p must be square-free. q must be relatively prime to k.
+--
+--   Integral Examples to Try: 
+--   chineseAurif ((q^(2*m) * p) ^ (p * k)) ((r^(2*n))^(p * k)) True -- equivalent to 931^247 + 1
+--   where (q, m, p, k, r, n) = (7, 1, 19, 13, 1, 1)
+--
+--   chineseAurif ((q^(2*m) * p) ^ (p * k)) ((r^(2*n))^(p * k)) False -- equivalent to (5^16*29)^377 - 121^377  
+--   where (q, m, p, k, r, n) = (5, 8, 29, 13, 11, 1)
+--
 chineseAurifCr :: CR_ -> CR_ -> Bool -> CycloMap -> (Maybe (Integer, Integer), CycloMap)
 chineseAurifCr xp yp b m = case c of
                              Nothing -> chineseAurifI mbyx n myx (crToI myx) b m' -- if first try fails, try the reverse
@@ -437,7 +465,7 @@ chineseAurifCr xp yp b m = case c of
                                  gcdxy   = crGCD xp yp
                                  (x, y)  = (crDivStrict xp gcdxy, crDivStrict yp gcdxy) -- strip out any commonality
                                  n       = gcd (crMaxRoot $ crAbs x) (crMaxRoot $ crAbs y)  
-                                 ncr     = crFromI n                         
+                                 ncr     = fst $ crFromI n -- factorization cutoff not an issue here
                                  mbxy    = crRoot (crDivRational x y) n
                                  mxy     = crGCD (crNumer mbxy)  ncr   
                                  mbyx    = crRecip mbxy
@@ -471,7 +499,7 @@ chineseAurifI mbcr n mcr m b mp | mod n 2 == 0        || mod m 2 == 0 ||        
                                                              where t = (jR 2) * r * (mb ^ (div (k-1) 2))
                                                                    s = sum $ map (\c -> (jR c) * eM^(k*c)) 
                                                                            $ filter (\c -> gcd c m == 1) [1..m] -- rel. prime
-                                                    ncr      = crFromI n
+                                                    ncr      = fst $ crFromI n -- factor cutoff not an issue here
                                                     -- get cyclotomic value
                                                     cv        = head $ applyCrCycloPairI (numerator eM) (denominator eM) ncr [cp]
                                                     (cp, mp') = crCyclo ncr mp 
@@ -484,4 +512,33 @@ convJacobi j = case j of
                  MinusOne -> -1
                  Zero     -> 0
                  One      -> 1
+
+-- Simple Polynomial functions just used internally
+-- Generate a polynomial of the form: x^n - 1
+gen_xNm1 :: Int -> Poly
+gen_xNm1 r = -1 : (replicate (r-1) 0) ++ [1]
+
+genPrimePoly :: Int -> (Integer, Poly)
+genPrimePoly r = (1, replicate r 1) 
+
+multPoly :: Num a => [a] -> [a] -> [a]
+multPoly [] _ = []
+multPoly (p:p1) p2 = let pTimesP2        = multiplyBy p p2
+                         xTimesP1Timesp2 = multiplyByX $ multPoly p1 p2
+                     in addPoly pTimesP2 xTimesP1Timesp2
+                     where multiplyBy  a p' = map (a*) p'
+                           multiplyByX p'   = 0:p'
+
+-- assumption that p1 is a multiple of p2
+divPoly :: Integral a => [a] -> [a] -> [a]
+divPoly p1 p2 = go [] p1 (length p1 - length p2)
+                where go q u n
+                        | n < 0     = q
+                        | otherwise = go (q0:q) u' (n-1)
+                                      where q0 = div (head u) (head p2)
+                                            u' = tail (addPoly u (map (\t -> -1 * t * q0) p2))
+
+addPoly :: Num a => [a] -> [a] -> [a]
+addPoly p1 p2 = if (length p1 >= length p2) then (add' p1 p2) else (add' p2 p1)
+                where add' p1' p2' = zipWith (+) p1' (p2' ++ repeat 0)
 

@@ -1,3 +1,6 @@
+0.1.1.0:  
+    Canon.hs: Substantial enhancements to support hyperexpressions as first-class numbers.  Most of the changes were to this file.
+
 0.1.0.4:
     AurifCyclo.hs: Remove fromCycloMap, cmLookup from API and remove fromCycloMap function.
                    Add exposed function getIntegerCycloMap.

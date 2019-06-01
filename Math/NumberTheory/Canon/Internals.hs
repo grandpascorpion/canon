@@ -1,8 +1,8 @@
 -- |
 -- Module:      Math.NumberTheory.Canon.Internals
--- Copyright:   (c) 2015-2018 Frederick Schneider
+-- Copyright:   (c) 2015-2019 Frederick Schneider
 -- Licence:     MIT
--- Maintainer:  Frederick Schneider <frederick.schneider2011@gmail.com>
+-- Maintainer:  Frederick Schneider <fws.nyc@gmail.com>
 -- Stability:   Provisional
 --
 -- This module defines the internal canonical representation of numbers (CR_), a product of pairs (prime and exponent). 
@@ -51,6 +51,7 @@ module Math.NumberTheory.Canon.Internals (
   crMax,
   crValid,
   crMod, crModI,
+  crSimplified,
   
   crDivisors,
   crNumDivisors,
@@ -60,12 +61,14 @@ module Math.NumberTheory.Canon.Internals (
   crTau,
   crTotient,
   crPhi,
-  
+   
   crN1,
   cr0,
   cr1,
   creN1,
-    
+   
+  crFactCutoff, crSmallFactCutoff,
+ 
   pattern PZero,
   pattern PZeroBad,
   pattern POne,
@@ -118,8 +121,10 @@ where
    The Canon library should be used as it hides these internal details.
 -}
 
-import Data.List (intersperse)
-import Math.NumberTheory.Primes.Factorisation (factorise, factorise')
+import Data.List (intersperse, partition)
+import Math.NumberTheory.Primes.Factorisation (smallFactors, stdGenFactorisation, factorise') 
+import System.Random (mkStdGen)
+import Data.Bits (xor)
 import Data.List (sortBy)
 import Math.NumberTheory.Primes.Testing (isPrime)
 import GHC.Real (Ratio(..))
@@ -232,14 +237,50 @@ crValidRational n = crValid n isPrime False
 -- | Checks if a CR_ is Rational and valid per user-supplied criterion.
 crValidRationalViaUserFunc  n f = crValid n f False
 
-crFromInteger, crFromI :: Integer -> CR_
+crFromInteger, crFromI :: Integer -> (CR_, Bool)
 
 -- | Factor the number to convert it to a canonical rep.  This is of course can be extremely expensive.
-crFromInteger 0 = cr0
-crFromInteger n = map (\(p, e) -> (p, toInteger e)) $ sortBy sf $ factorise n
-                  -- the prime factors must be in ascending order
-                  where sf (p1, _) (p2, _) | p1 < p2   = LT
-                                           | otherwise = GT
+--   (This now also returns a flag indicating True if the number was completely factored.)
+crFromInteger n | n == 0    = (cr0,    True)
+                | n == 1    = (cr1,    True)
+                | n == -1   = (crN1,   True)
+                | n < 0     = (creN1:cr, ff)  -- in case arithmoi excludes -1 as a factor in the future
+                | otherwise = (cr,       ff) 
+                where cr                 = crSort $ map (\(p, e) -> (p, toInteger e)) cr'
+                      -- the prime factors must be in ascending order
+                      (cr', ff)          = factorize (abs n) -- ToDo: pass to fcn
+
+crSort :: CR_ -> CR_ 
+crSort = sortBy prd 
+         where prd (p1, _) (p2, _) | p1 < p2   = LT
+                                   | otherwise = GT
+
+-- Note: if crFactCutoff is <= 0, complete factorization is attempted 
+-- and all of the cutoff / spFactor logic is not used.
+crFactCutoff, crTrialDivCutoff, crSmallFactCutoff, crTrialDivCutoffSq :: Integer
+crFactCutoff = (10 :: Integer) ^ (80 :: Int) -- Note: if this is <= 0, complete factorization is attempted
+crTrialDivCutoff      = 100000
+crSmallFactCutoff     = 10000000 -- use this higher cutoff if the number is beyond the factorization cutoff
+crTrialDivCutoffSq    = crTrialDivCutoff * crTrialDivCutoff 
+
+-- factorize and deftStdGenFact were adapted from arithmoi
+factorize :: Integer -> ([(Integer,Int)], Bool)
+factorize n = if crFactCutoff > 0 
+              then defStdGenFact (mkStdGen $ fromInteger n `xor` 0xdeadbeef)
+              else (factorise' n, True) -- call underlying routine from arithmoi
+              where defStdGenFact sg 
+                      = let (sfs,mb) = smallFactors (if n <= crFactCutoff 
+                                                     then crTrialDivCutoff 
+                                                     else crSmallFactCutoff) n
+                        in (sfs ++ case mb of
+                                   Nothing -> []
+                                   Just m  -> if m > crFactCutoff 
+                                              then [(m, 1)]
+                                              else stdGenFactorisation (Just crTrialDivCutoffSq) sg Nothing m,
+                            case mb of
+                            Nothing -> True 
+                            Just m  -> m < crFactCutoff || isPrime m -- if less, do a complete factorization
+                           )
 
 -- | Shorthand for crFromInteger function
 crFromI n = crFromInteger n 
@@ -269,12 +310,12 @@ crModI c     m | cn && mn         = -1 * crModI (crAbs c) am
                where cn           = crNegative c
                      mn           = m < 0
                      am           = abs m
-                     f c' m'      = mod (product $ map (\(x,y) -> pmI x (mmt y) m') c') m'
+                     f c' m'      = mod (product $ map (\(x,y) -> if (mod x m' == 0) then 0 else (pmI x (mmt y) m')) c') m'
                      mmt e        | e >= 1    = mod e $ totient m -- optimization
                                   | otherwise =  error "Negative exponents are not allowed in crModI" 
 
 -- | Compute modulus with all CR_ parameters.  This wraps crModI.
-crMod :: CR_ -> CR_ -> CR_
+crMod :: CR_ -> CR_ -> (CR_, Bool)
 crMod c m = crFromI $ crModI c (crToI m)
            
 -- | Display a Canon Element (as either p^e or p).
@@ -405,8 +446,11 @@ crDivRational x y = crMult (crRecip y) x -- multiply by the reciprocal
 -- | For the GCD (Greatest Common Divisor), take the lesser of two exponents for each prime encountered.
 crGCD PZero y     = y
 crGCD x     PZero = x
-crGCD x     y     | crNegative x || crNegative y = f (crAbs x) (crAbs y)
-                  | otherwise                    = f x         y
+crGCD x     y     | crNegative x || crNegative y       = f (crAbs x) (crAbs y)
+                  | crFactCutoff > 0 &&
+                    ((spIncompFact x && spUnsmooth y) || -- either has an imcomplete factorization and the other
+                     (spIncompFact y && spUnsmooth x)) = f spx spy -- in case of unfactored bits
+                  | otherwise                          = f x   y
                   where f POne _    = cr1
                         f _    POne = cr1
                         f x'   y'   = case compare xp yp of
@@ -415,12 +459,16 @@ crGCD x     y     | crNegative x || crNegative y = f (crAbs x) (crAbs y)
                                         GT -> f x' ys
                                       where ((xp,xe):xs) = x'
                                             ((yp,ye):ys) = y'    
+                        (spx, spy)  = spFactor x y
 
 -- | For the LCM (Least Common Multiple), take the max of two exponents for each prime encountered.
-crLCM PZero y     = y
-crLCM x     PZero = x
-crLCM x     y     | crNegative x || crNegative y = f (crAbs x) (crAbs y)
-                  | otherwise                    = f x         y
+crLCM PZero _     = cr0
+crLCM _     PZero = cr0 
+crLCM x     y     | crNegative x || crNegative y       = f (crAbs x) (crAbs y)
+                  | crFactCutoff > 0 &&
+                    ((spIncompFact x && spUnsmooth y) || -- either has an imcomplete factorization and the other
+                     (spIncompFact y && spUnsmooth x)) = f spx spy -- in case of unfactored bits 
+                  | otherwise                          = f x   y
                   where f POne y'   = y'
                         f x'   POne = x'
                         f x'   y'   = case compare xp yp of
@@ -428,7 +476,42 @@ crLCM x     y     | crNegative x || crNegative y = f (crAbs x) (crAbs y)
                                         EQ -> (xp, max xe ye) : f xs ys
                                         GT -> yh : f x' ys
                                       where (xh@(xp,xe):xs) = x'
-                                            (yh@(yp,ye):ys) = y'  
+                                            (yh@(yp,ye):ys) = y' 
+                        (spx, spy)  = spFactor x y
+
+-- special factor: This covers the case where we have unfactored large components but on comparison with another
+-- cr we can see that the component can be reduced.  We partition the cr into 
+-- three pieces: small factor cutoff, prime, composite (implying it's > factor. cutoff)
+spFactor :: CR_ -> CR_ -> (CR_, CR_)
+spFactor x y = (sx ++ (grp $ crSort $ px ++ spF cx (py ++ cy)), 
+                sy ++ (grp $ crSort $ py ++ spF cy (px ++ cx)) )  
+               where spl n           = (s, p, c)
+                                       where (s, r) = partition spSmooth n
+                                             (p, c) = partition (\ce -> not $ spBigComposite ce) r 
+                     (sx, px, cx)    = spl x
+                     (sy, py, cy)    = spl y                  
+                     grp (n:ns)      = g' n ns
+                     grp _           = error "The list to be grouped in spFactor must have at least one element"
+                     g' (b,e) (r:rs) = if b == b' then g' (b, e + e') rs  -- group by common base on sorted list
+                                                  else (b,e):g' (b', e') rs
+                                       where (b', e') = r
+                     g' ce    _      = [ce]
+                      
+                     -- take each entry in f and compute the gcd.  ToDo: replace with fold
+                     spF n (f:fs)    = spF (concat $ map (proc f) n) fs -- this is quadratic but likely with very short lists
+                                       where proc (pf, _) (pn, en) = if g == 1 || g == pn then [(pn, en)] 
+                                                                     else [(g, en), (div pn g, en)]
+                                                                     where g = gcd pn pf
+                     spF n _         = n
+
+-- Predicates used for special cases of GCD and LCM
+spUnsmooth, spIncompFact :: CR_ -> Bool
+spUnsmooth    = any (\ce -> not $ spSmooth ce)
+spIncompFact  = any spBigComposite
+
+spBigComposite, spSmooth :: CanonElement_ -> Bool
+spSmooth    (b,_) = b <= crSmallFactCutoff
+spBigComposite (b,_) = b > crFactCutoff && (not $ isPrime b)
 
 -- | Take the reciprocal by raising a CR to the -1 power (equivalent to multiplying exponents by -1).
 crRecip :: CR_ -> CR_
@@ -506,17 +589,22 @@ integerApply :: (Integer -> Integer -> Integer) -> CR_ -> CR_ -> Integer
 integerApply op x y  = op (crToI x) (crToI y)
 
 -- | Calls integerApply and returns a CR_.
-crSimpleApply :: (Integer -> Integer -> Integer) -> CR_ -> CR_ -> CR_
+crSimpleApply :: (Integer -> Integer -> Integer) -> CR_ -> CR_ -> (CR_, Bool)
 crSimpleApply op x y = crFromI $ integerApply op x y
 
+{- No longer needed.  Different criteria used now
 pattern PPrime :: forall a a1. (Eq a, Num a, Num a1, Ord a1) => [(a1, a)]
 pattern PPrime <- [(compare 1 -> LT, 1)] -- of form x^1 where x > 1 -- prime (assumption p has already been verified to be prime)
+-}
 
 crPrime, crHasSquare :: CR_ -> Bool
 
 -- | Check if a number is a prime.
-crPrime PPrime = True
-crPrime _      = False
+crPrime cr | length cr > 1 || null cr = False
+           | e == 1 && b > 1 && (crFactCutoff == 0 || b <= crFactCutoff || (b > crFactCutoff && isPrime b))
+                                      = True
+           | otherwise                = False
+           where (b,e) = head cr
 
 -- | Check if a number has a squared (or higher) factor.
 crHasSquare    = any (\(_,e) -> e > 1) 
@@ -571,12 +659,21 @@ crDivsPlus c = foldr1 cartProd (map pwrDivList c)
                      tr (a,b)         = (if fb == 0 then cr1 else [(a, fb)], sb) -- this just transforms the data structure
                                         where (fb, sb) = b
 
+-- | Check if underlying rep is simplified
+crSimplified :: CR_ -> Bool
+crSimplified POne  = True
+crSimplified PZero = True
+crSimplified PN1   = True
+crSimplified c     = crPrime c
+
 -- | Compute totient: Logic from deprecated arithmoi function used here.
 totient :: Integer -> Integer
 totient n
-    | n < 1     = error "Totient only defined for positive numbers"
-    | n == 1    = 1
-    | otherwise = product $ map (\(p,e) -> (p-1) * p ^ (e-1)) $ factorise' n 
+    | n < 1       = error "Totient only defined for positive numbers"
+    | n == 1      = 1
+    | ff == False = error "Totient not computable.  The number could not be totally factored based on the factorizaton cutoff."
+    | otherwise   = product $ map (\(p,e) -> (p-1) * p ^ (e-1)) cr 
+    where (cr, ff) = factorize n -- ToDo: pass the param to function
 
 -- | powerModInteger adapted here from deprecated arithmoi function.
 pmI :: Integer -> Integer -> Integer -> Integer
@@ -587,4 +684,4 @@ pmI x p m | x < 1 || p < 0 || m < 1 = error "pmI (powerModInteger) requires: x >
                         | otherwise        = f (div q 2) nw (mod (e*e) m) 
                                                where nw | mod q 2 == 1 = mod (w*e) m 
                                                         | otherwise    = w
-  
+

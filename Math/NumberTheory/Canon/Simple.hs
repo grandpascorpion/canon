@@ -1,8 +1,8 @@
 -- |
 -- Module:      Math.NumberTheory.Canon.Simple
--- Copyright:   (c) 2015-2018 Frederick Schneider
+-- Copyright:   (c) 2015-2019 Frederick Schneider
 -- Licence:     MIT
--- Maintainer:  Frederick Schneider <frederick.schneider2011@gmail.com>
+-- Maintainer:  Frederick Schneider <fws.nyc@gmail.com>
 -- Stability:   Provisional
 --
 -- This a wrapper for the Canonical Representation type found in the Internals module.  
@@ -61,7 +61,7 @@ instance Show SimpleCanon where
   show c = crShow $ fromSC c
            
 instance Enum SimpleCanon where
-  toEnum   n = toSimpleCanon $ crFromI $ fromIntegral n
+  toEnum   n = toSimpleCanon $ fst $ crFromI $ fromIntegral n
   fromEnum c = fromIntegral $ crToI $ fromSC c
 
 instance Ord SimpleCanon where
@@ -74,16 +74,16 @@ instance Integral SimpleCanon where
   toInteger c = scToI c
   quotRem n m = (MakeSC n', MakeSC m') 
                 where (n', m') = fst $ crQuotRem (fromSC n) (fromSC m) crCycloInitMap
-  mod n m     = MakeSC $ crMod (fromSC n) (fromSC m)
+  mod n m     = MakeSC $ fst $ crMod (fromSC n) (fromSC m)
             
 instance Fractional SimpleCanon where
-  fromRational (n :% d) | m == 0    = MakeSC $ crFromI q
+  fromRational (n :% d) | m == 0    = MakeSC $ fst $ crFromI q
                         | otherwise = error "Modulus not zero.  Use Rational SimpleCanons for non-Integers."
                         where (q, m) = quotRem n d
   (/) x y               = MakeSC $ crDivStrict (fromSC x) (fromSC y)
 
 instance Num SimpleCanon where
-  fromInteger n = MakeSC $ crFromI n    -- to do: check where called?
+  fromInteger n = MakeSC $ fst $ crFromI n    -- to do: check where called?
   x + y         = MakeSC $ fst $ crAdd      (fromSC x) (fromSC y) crCycloInitMap -- discard the map
   x - y         = MakeSC $ fst $ crSubtract (fromSC x) (fromSC y) crCycloInitMap -- discard the map
   x * y         = MakeSC $ crMult     (fromSC x) (fromSC y)
@@ -139,7 +139,7 @@ instance Show RationalSimpleCanon where
   show rc = crShowRational $ fromRC rc
   
 instance Enum RationalSimpleCanon where
-  toEnum   n = toRC $ crFromI $ fromIntegral n
+  toEnum   n = toRC $ fst $ crFromI $ fromIntegral n
   fromEnum c = fromIntegral $ toInteger c -- if not integral, this will fail
 
 -- | Caveat: These functions will error out (in)directly if there are any negative exponents.
@@ -148,11 +148,11 @@ instance Integral RationalSimpleCanon where
   quotRem n m  | crIntegral $ fromRC n = (MakeRC n', MakeRC m') 
                | otherwise             = error "Can't perform 'quotRem' on non-integral RationalSimpleCanon"
                where (n', m') = fst $ crQuotRem (fromRC n) (fromRC m) crCycloInitMap
-  mod n m      | crIntegral $ fromRC n = MakeRC $ crMod (fromRC n) (fromRC m) 
+  mod n m      | crIntegral $ fromRC n = MakeRC $ fst $ crMod (fromRC n) (fromRC m) 
                | otherwise             = error "Can't perform 'mod' on non-integral RationalSimpleCanon"
 
 instance Fractional RationalSimpleCanon where
-  fromRational (n :% d) = MakeRC $ crDivRational (crFromI n) (crFromI d)
+  fromRational (n :% d) = MakeRC $ crDivRational (fst $ crFromI n) (fst $ crFromI d)
   (/) x y               = MakeRC $ crDivRational (fromRC x)  (fromRC y)
 
 instance Ord RationalSimpleCanon where
@@ -162,7 +162,7 @@ instance Real RationalSimpleCanon where
   toRational rc  = crToRational $ fromRC rc
                   
 instance Num RationalSimpleCanon where
-  fromInteger n = MakeRC $ crFromI n
+  fromInteger n = MakeRC $ fst $ crFromI n
   x + y         = MakeRC $ fst $ crAddR      (fromRC x) (fromRC y) crCycloInitMap
   x - y         = MakeRC $ fst $ crSubtractR (fromRC x) (fromRC y) crCycloInitMap
   x * y         = MakeRC $ crMult      (fromRC x) (fromRC y) 
@@ -221,7 +221,7 @@ class SimpleCanonExpnt a b c | a b -> c where
   (<^) :: a -> b -> c
 
 instance SimpleCanonExpnt Integer Integer SimpleCanon where
-  p <^ e = MakeSC $ crExp (crFromI p) e False
+  p <^ e = MakeSC $ crExp (fst $ crFromI p) e False
 
 instance SimpleCanonExpnt SimpleCanon Integer SimpleCanon where
   p <^ e = MakeSC $ crExp (fromSC p) e False
@@ -243,13 +243,13 @@ instance SimpleCanonRoot SimpleCanon SimpleCanon SimpleCanon where
   r >^ n = MakeSC $ crRoot (fromSC n) (toInteger r)
   
 instance SimpleCanonRoot Integer Integer SimpleCanon where
-  r >^ n = MakeSC $ crRoot (crFromI n) r
+  r >^ n = MakeSC $ crRoot (fst $ crFromI n) r
   
 instance SimpleCanonRoot Integer SimpleCanon SimpleCanon where
   r >^ n = MakeSC $ crRoot (fromSC n) r
 
 instance SimpleCanonRoot SimpleCanon Integer SimpleCanon where
-  r >^ n = MakeSC $ crRoot (crFromI n) (toInteger r)  
+  r >^ n = MakeSC $ crRoot (fst $ crFromI n) (toInteger r)  
   
 instance SimpleCanonRoot Integer RationalSimpleCanon RationalSimpleCanon where
   r >^ n = MakeRC $ crRoot (fromRC n) r

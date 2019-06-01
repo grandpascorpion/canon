@@ -1,8 +1,8 @@
 -- |
 -- Module:      Math.NumberTheory.Canon.Additive
--- Copyright:   (c) 2015-2018 Frederick Schneider
+-- Copyright:   (c) 2015-2019 Frederick Schneider
 -- Licence:     MIT
--- Maintainer:  Frederick Schneider <frederick.schneider2011@gmail.com>
+-- Maintainer:  Frederick Schneider <fws.nyc@gmail.com>
 -- Stability:   Provisional
 --
 -- Internal module: Mostly functions for the addition and subtraction of CRs (Canonical Representations of numbers)
@@ -83,8 +83,8 @@ logThreshold = 10 * (log 10) -- 'n' digit number
 -}  
 crApplyAdtvOptConv :: Bool -> CR_ -> CR_ -> CycloMap -> (CR_, CycloMap)
 crApplyAdtvOptConv b x y m 
-   | gi < 2 || mL <= logThreshold 
-                             = (crSimpleApply op x y, m) -- no algebraic optimization we can perform
+   | gi < 2 || mL <= logThreshold -- no algebraic optimization we can perform.  incomplete factorization not an issue here
+                             = (fst $ crSimpleApply op x y, m) 
    | crPositive x            = if crPositive y then crCycloAurifApply b       ax ay g gi m
                                                else crCycloAurifApply (not b) ax ay g gi m
    | (crNegative y) && b     = (crNegate c1, m1)
@@ -94,7 +94,7 @@ crApplyAdtvOptConv b x y m
     where op       = if b then (+) else (-)
           (ax, ay) = (crAbs x, crAbs y)
           gi       = gcd (crMaxRoot ax) (crMaxRoot ay)
-          g        = crFromInteger $ fromIntegral gi
+          g        = fst $ crFromI $ fromIntegral gi -- it's very unlikely that the gcd of the max roots would be > factor cutoff
           mL       = max (crLogDouble ax) (crLogDouble ay)
           (c1, m1) = crCycloAurifApply b       ax ay g gi m
           (c2, m2) = crCycloAurifApply (not b) ax ay g gi m -- corresponds to "otherwise"
@@ -102,8 +102,9 @@ crApplyAdtvOptConv b x y m
 -- | Quot Rem function for CR_.  Optimization: Check first if q is a multiple of r.  If so, we avoid the potentially expensive conversion.
 crQuotRem :: CR_ -> CR_ -> CycloMap -> ((CR_, CR_), CycloMap)
 crQuotRem x y m = case (crDiv x y) of
-                    Left  _        -> ((q,        md), m') 
-                    Right quotient -> ((quotient, cr0), m)
-                  where md      = crMod x y  -- Better to compute quotient this way .. to take adv. of alg. forms
+                  Left  _        -> ((q,        md), m') 
+                  Right quotient -> ((quotient, cr0), m)
+                  -- Better to compute quotient this way .. to take adv. of alg. forms.  For crMod, incomp. factor not an issue
+                  where md      = fst $ crMod x y  
                         q       = crDivStrict d y -- (x - x%y) / y. 
                         (d, m') = crSubtract x md m
