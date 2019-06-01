@@ -19,10 +19,10 @@ cabal-version:       >=1.10
 
 library
     build-depends       : base >= 4.9.1.0 && < 5
-                        , arithmoi >= 0.6.0.1 
+                        , arithmoi >= 0.6.0.1 && < 0.9
                         , array >= 0.5.1.1 && < 0.6
                         , containers >= 0.5.7.1 && < 0.7
-                        , random >= 1.0
+                        , random >= 1.0 && < 1.2
 
     exposed-modules     : Math.NumberTheory.Canon
                           Math.NumberTheory.Canon.Simple
