@@ -92,6 +92,7 @@ data BareStatus = Simp | NSim deriving (Eq, Ord, Show)
 makeCanon :: Integer -> Canon
 makeCanon n = fst $ makeCanon' n
 
+-- | Create a Canon from an Integer.  Also return True if the number is fully factored
 makeCanon' :: Integer -> (Canon, Bool)
 makeCanon' n = (f cr, ff)
                where f POne                  = Bare 1 Simp
@@ -141,7 +142,7 @@ hyperOpStrings = [
 smallCanons :: [Canon]
 smallCanons = map (\n -> makeCanon n) [0..maxHyperOpDispLevel]
 
--- | Levels starting with 1 in the hyperoperation / Peano arithmetic hierarchy
+-- | Levels starting with 1 in the hyperoperation hierarchy
 cAddOpLevel, cMultOpLevel, cExpOpLevel, cTetrOpLevel, 
   cPentOpLevel, cHexOpLevel, cHeptOpLevel, cOctOpLevel, cNonOpLevel :: Canon
 
@@ -669,6 +670,7 @@ cPhi = cTotient
 
 
 -- | The thinking around the hyperoperators is that they should look progressively scarier :)
+-- | They range from level 4 / tetration (<^>) to level 50 (~~~~~^~~~~~). Please read .odp file for the naming convention.
 infixr <^>, <<^>>, <<<^>>>, <<<<^>>>>, <<<<<^>>>>>, |<^>|,                                  -- 4-9
        ~^~, ~<^>~, ~<<^>>~, ~<<<^>>>~, ~<<<<^>>>>~,                                         -- 10-14
        ~|^|~, ~|<^>|~, ~|<<^>>|~, ~|<<<^>>>|~, ~|<<<<^>>>>|~,                               -- 15-19
@@ -1079,10 +1081,12 @@ cHyperOpSpecial _ Pc1 _    m = (c1, m)
 cHyperOpSpecial _ a'  Pc1  m = (a', m)
 cHyperOpSpecial _ _   _    _ = error "Can't compute this hyperoperation.  b must be >= -1.  Not a 'special' case"                
 
+-- | Return the list of canons from a hyper expression
 cGetHyperList :: Canon -> [Canon]
 cGetHyperList (HX _ cL _) = cL
 cGetHyperList _           = []
 
+-- | Return the level of hyperoperation from a hyper expression.
 cGetHyperOp :: Canon -> Canon
 cGetHyperOp (HX h _ _) = h
 cGetHyperOp _          = c0
@@ -2236,6 +2240,7 @@ cDivisors c | not (canComputeDivs c') = Left "cWhichDivisor: Canon was either ze
                                                                         else [(n, makeCanon y)] | y <- [0 .. cToI e]]
                   divs _          = error "cDivisors can't return all of the divisors for hyper expressions!"
 
+-- | Return the first N divisors of a hyper expression (if possible)
 cGetFirstNDivisors :: Int -> Canon -> Either String [Canon]
 cGetFirstNDivisors n c@(HX _ _ IntC) 
                        | any errPred divList = Left "cGetNDivisors: Canon was either zero or not completely factored.  Can't compute"
@@ -2263,6 +2268,7 @@ canComputeDivs c | cBare c && (cToI c == 0)                    = False
 smallPrimeCanons :: [Canon]
 smallPrimeCanons = map (\p -> Bare p Simp) $ take 1000 primes
 
+-- | This will determine if two arbitary expressions are relatively prime or not (if possible).  Goes deep.
 cRelativelyPrime :: Canon -> Canon -> Maybe Bool
 cRelativelyPrime x y | x == c1 || y == c1     = Just True
                      | cEven x && cEven y     = Just False
@@ -2605,7 +2611,7 @@ slRefine (lvl, v) = if v > lB
                     then slRefine (lvl + c1, logB v)
                     else (if v <= 1.0 then (lvl - c1, powB v) else (lvl, v))
 
--- Compare the level and the "mantissa"
+-- | Compare the level and the "mantissa"
 cSuperLogCmp :: SuperPairC -> SuperPairC -> Ordering
 cSuperLogCmp (l1, m1) (l2, m2) | l1 > l2                   = GT
                                | l1 < l2                   = LT
@@ -2683,6 +2689,7 @@ pattern PoE <- Pc3 -- exponentiation operator
 pattern PcN1 :: Canon  -- this pattern is only used in the "bad" function
 pattern PcN1 <- Can [(-1, Bare 1 _)] _
 
+-- | Maximum exponent (of a polynomial) to distribute into a sum of terms.
 cMaxExpoToExpand :: Canon 
 cMaxExpoToExpand = c4 
 
@@ -2814,6 +2821,7 @@ expH' a                b               | cHyperExprAny a || cHyperExprAny b = fs
 negSumList :: Canon -> [Canon]
 negSumList c = map negate $ cGetHyperList ((cGetHyperList c) !! 1)  -- e.g. -1 * (3 + 5) -> (-3 -5)
 
+-- | Convert a hyperexpression to a sum if possible.  Useful in comparison. Will expand polynomials to a limited degree.
 cConvertToSum :: Canon -> (Canon, Bool)
 cConvertToSum x  = cConvertToSum' x cMaxExpoToExpand 
 

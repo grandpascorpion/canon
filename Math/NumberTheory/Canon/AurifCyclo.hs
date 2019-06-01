@@ -521,6 +521,7 @@ gen_xNm1 r = -1 : (replicate (r-1) 0) ++ [1]
 genPrimePoly :: Int -> (Integer, Poly)
 genPrimePoly r = (1, replicate r 1) 
 
+-- | Multiply two polynomials
 multPoly :: Num a => [a] -> [a] -> [a]
 multPoly [] _ = []
 multPoly (p:p1) p2 = let pTimesP2        = multiplyBy p p2
@@ -529,7 +530,7 @@ multPoly (p:p1) p2 = let pTimesP2        = multiplyBy p p2
                      where multiplyBy  a p' = map (a*) p'
                            multiplyByX p'   = 0:p'
 
--- assumption that p1 is a multiple of p2
+-- | Div function for polynomials.  The assumption is that p1 is a multiple of p2
 divPoly :: Integral a => [a] -> [a] -> [a]
 divPoly p1 p2 = go [] p1 (length p1 - length p2)
                 where go q u n
@@ -538,6 +539,7 @@ divPoly p1 p2 = go [] p1 (length p1 - length p2)
                                       where q0 = div (head u) (head p2)
                                             u' = tail (addPoly u (map (\t -> -1 * t * q0) p2))
 
+-- | Add two polynomials
 addPoly :: Num a => [a] -> [a] -> [a]
 addPoly p1 p2 = if (length p1 >= length p2) then (add' p1 p2) else (add' p2 p1)
                 where add' p1' p2' = zipWith (+) p1' (p2' ++ repeat 0)

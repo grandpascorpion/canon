@@ -32,7 +32,7 @@ library
     other-modules       : Math.NumberTheory.Canon.Internals
                           Math.NumberTheory.Canon.Additive
 
-    ghc-options         : -O2 -Wall
-    ghc-prof-options    : -O2 -auto
+    ghc-options         : -Wall
+    ghc-prof-options    : -auto
 
     default-language:    Haskell2010
