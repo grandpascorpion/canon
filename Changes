@@ -1,5 +1,9 @@
+0.1.1.1: 
+    Add support for arithmoi-0.9.0.0 which had a breaking change that affected the Internals.hs file. (No change to API)
+
 0.1.1.0:  
     Canon.hs: Substantial enhancements to support hyperexpressions as first-class numbers.  Most of the changes were to this file.
+    Allow for partially factored numbers so the code will not hang endlessly on numbers with large composite factors.
 
 0.1.0.4:
     AurifCyclo.hs: Remove fromCycloMap, cmLookup from API and remove fromCycloMap function.

@@ -246,7 +246,7 @@ crFromInteger n | n == 0    = (cr0,    True)
                 | n == -1   = (crN1,   True)
                 | n < 0     = (creN1:cr, ff)  -- in case arithmoi excludes -1 as a factor in the future
                 | otherwise = (cr,       ff) 
-                where cr                 = crSort $ map (\(p, e) -> (p, toInteger e)) cr'
+                where cr                 = crSort cr'
                       -- the prime factors must be in ascending order
                       (cr', ff)          = factorize (abs n) -- ToDo: pass to fcn
 
@@ -264,23 +264,24 @@ crSmallFactCutoff     = 10000000 -- use this higher cutoff if the number is beyo
 crTrialDivCutoffSq    = crTrialDivCutoff * crTrialDivCutoff 
 
 -- factorize and deftStdGenFact were adapted from arithmoi
-factorize :: Integer -> ([(Integer,Int)], Bool)
-factorize n = if crFactCutoff > 0 
-              then defStdGenFact (mkStdGen $ fromInteger n `xor` 0xdeadbeef)
-              else (factorise' n, True) -- call underlying routine from arithmoi
-              where defStdGenFact sg 
-                      = let (sfs,mb) = smallFactors (if n <= crFactCutoff 
-                                                     then crTrialDivCutoff 
-                                                     else crSmallFactCutoff) n
-                        in (sfs ++ case mb of
-                                   Nothing -> []
-                                   Just m  -> if m > crFactCutoff 
-                                              then [(m, 1)]
-                                              else stdGenFactorisation (Just crTrialDivCutoffSq) sg Nothing m,
-                            case mb of
-                            Nothing -> True 
-                            Just m  -> m < crFactCutoff || isPrime m -- if less, do a complete factorization
-                           )
+factorize :: Integer -> ([(Integer,Integer)], Bool)
+factorize n = (map (\(p,e) -> (p, toInteger e)) f, b)
+              where (f, b) = if crFactCutoff > 0 
+                             then defStdGenFact (mkStdGen $ fromInteger n `xor` 0xdeadbeef)
+                             else (factorise' n, True) -- call underlying routine from arithmoi
+                    defStdGenFact sg 
+                           = let (sfs,mb) = smallFactors (if n <= crFactCutoff 
+                                            then crTrialDivCutoff 
+                                            else crSmallFactCutoff) n
+                             in (sfs ++ case mb of
+                                        Nothing -> []
+                                        Just m  -> if m > crFactCutoff 
+                                                   then [(m, 1)]
+                                                   else stdGenFactorisation (Just crTrialDivCutoffSq) sg Nothing m,
+                                 case mb of
+                                 Nothing -> True 
+                                 Just m  -> m < crFactCutoff || isPrime m -- if less, do a complete factorization
+                                )
 
 -- | Shorthand for crFromInteger function
 crFromI n = crFromInteger n 
