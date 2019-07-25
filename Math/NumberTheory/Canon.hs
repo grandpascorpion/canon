@@ -54,7 +54,7 @@ module Math.NumberTheory.Canon (
 )
 where
 
-import Math.NumberTheory.Primes (primes)
+import Math.NumberTheory.Primes (primes, unPrime)
 import Math.NumberTheory.Primes.Testing (isPrime)
 import Data.List 
 import Data.Maybe (fromMaybe)
@@ -2266,7 +2266,7 @@ canComputeDivs c | cBare c && (cToI c == 0)                    = False
                  where cL@(b:_) = cGetHyperList c
 
 smallPrimeCanons :: [Canon]
-smallPrimeCanons = map (\p -> Bare p Simp) $ take 1000 primes
+smallPrimeCanons = map (\p -> Bare p Simp) $ map unPrime $ take 1000 primes
 
 -- | This will determine if two arbitary expressions are relatively prime or not (if possible).  Goes deep.
 cRelativelyPrime :: Canon -> Canon -> Maybe Bool
