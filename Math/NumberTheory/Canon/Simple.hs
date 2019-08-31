@@ -30,7 +30,8 @@ module Math.NumberTheory.Canon.Simple (
   getNumerAsRC, getDenomAsRC, getNumerDenomAsRCs,  
   rcLog,        rcLogDouble,
                                 
-  (>^), (<^), (%)         
+  (>^), (<^), (%),         
+  SimpleCanonRoot, SimpleCanonExpnt
 )
 where
 

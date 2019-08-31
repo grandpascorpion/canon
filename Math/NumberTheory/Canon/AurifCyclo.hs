@@ -5,21 +5,24 @@
 -- Maintainer:  Frederick Schneider <fws.nyc@gmail.com>
 -- Stability:   Provisional
 --
--- Aurifeullian and Cyclotomic factorization method functions.
+-- <https://en.wikipedia.org/wiki/Aurifeuillean_factorization Aurifeuillian> and 
+-- <https://en.wikipedia.org/wiki/Cyclotomic_polynomial Cyclotomic> 
+-- <https://en.wikipedia.org/wiki/Factorization factorization> method functions.
 
 {-# LANGUAGE PatternSynonyms, ViewPatterns #-}
 
 module Math.NumberTheory.Canon.AurifCyclo (
   aurCandDec,     
   aurDec,         
-  applyCycloPair, applyCycloPairWithMap,
+  applyCycloPair, applyCycloPairWithMap, CycloPair, Poly,
   cyclo,          cycloWithMap,
   cycloDivSet,    cycloDivSetWithMap,
   chineseAurif,   chineseAurifWithMap, 
 
   crCycloAurifApply, applyCrCycloPair, divvy,
   CycloMap, getIntegerBasedCycloMap, showCyclo, crCycloInitMap,
-  multPoly, divPoly, addPoly
+  multPoly, divPoly, addPoly,
+  CR_, CanonRep_, CanonElement_
 )
 where
 
@@ -39,7 +42,7 @@ cr2 = fst $ crFromI 2
 --   Note: The cyclotomic map is threaded into the functions
 crCycloAurifApply :: Bool -> CR_ -> CR_ -> CR_ -> Integer -> CycloMap -> (CR_, CycloMap)
 crCycloAurifApply b x y g gi m
-   -- Optimization for prime g: If g is a prime (and exp not of from x^2 + y^2) but not Aurifeullian (verify 
+   -- Optimization for prime g: If g is a prime (and exp not of from x^2 + y^2) but not Aurifeuillian (verify 
   | (crPrime g) && not (g == cr2 && b) 
                      = eA ([term1, termNM1], m) -- split into  (x +/- y) and (x^(n-1) ... -/+ y^(n-1))  
 
@@ -78,22 +81,17 @@ crCycloAurifApply b x y g gi m
                       | otherwise = g
         oddRoot v     = crToI $ crRoot v (crToI odd')
                         
-{-
-The following functions implement Richard Brent's algorithm for computing Aurifeullian factors.
-His logic is used in conjuction with cyclotomic polynomial decomposition.
-
-http://maths-people.anu.edu.au/~brent/pd/rpb127.pdf
-http://maths-people.anu.edu.au/~brent/pd/rpb135.pdf
--}
-
--- | This function checks if the input is a candidate for Aurifeuillian decomposition.
---   If so, split it into two and evaluate it.  Otherwise, return nothing.
+-- | This function checks if the input is a candidate for Aurifeuillian decomposition.  Its name is an abbreviation.
+--   If it is a candidate, split it into two and evaluate it.  Otherwise, return nothing.
 --   The code will "prep" the input params for the internal function so they will be relatively prime.
 --   Possible solutions:  Non-zero multiples of xi and yi (where xi and yi are relatively prime and of the form
 --                        xi = a^(a*b), yi = 1 where a and b are positive integers and b is odd. (xi and y1 may be interchanged)
 --                        If a is even, we will find factors of a^(a*b) + 1.  The bool flag must be True
 --                        If a is odd,  we will find factors of a^(a*b) - 1.  The bool flag must be False 
---
+--   This function and those it calls internally implement Richard Brent's algorithm for computing Aurifeuillian factors.
+--   His logic is used in conjuction with cyclotomic polynomial decomposition.  They are explained in these two papers: 
+--   <http://maths-people.anu.edu.au/~brent/pd/rpb127.pdf rpb127> and <http://maths-people.anu.edu.au/~brent/pd/rpb135.pdf rpb135>.
+
 aurCandDec :: Integer -> Integer -> Bool -> Maybe (Integer, Integer)
 aurCandDec xi yi b = f (fst $ crFromI xi) (fst $ crFromI yi)
                      where f xp yp = aurCandDecI x y n (fst $ crFromI n) b 
@@ -159,7 +157,7 @@ aurDec :: Integer -> Maybe (Array Integer Integer, Array Integer Integer)
 aurDec n | n <= 1    = error "aurifDecomp: n must be greater than 1"
          | otherwise = aurDecI n (fst $ crFromI n) -- no concern about factorization cutoff here
 
--- | Internal Aurifeullian Decomposition Workhorse Function
+-- | Internal Aurifeuillian Decomposition Workhorse Function
 aurDecI :: Integer -> CR_ -> Maybe (Array Integer Integer, Array Integer Integer) 
 aurDecI n cr | crHasSquare cr || n < 2 || n' < 2
                          = Nothing
@@ -250,9 +248,10 @@ divvy a x y = d (sortBy rev a) (abs x) (abs y)
       x^15-y^15 = (x-y) (x^2+x y+y^2) (x^4+x^3 y+x^2 y^2+x y^3+y^4) (x^8-x^7*y +x^5*y^3 - x^4*y^4 +x^3*y^5 -x*y^7+y^8)
 
     C(15) is a form of the last term where y = 1
-    It's possible in some cases to do an additional Aurifeullian factorization (of the last term).   -}
+    It's possible in some cases to do an additional Aurifeuillian factorization (of the last term).   -}
 
-type Poly = [Integer] -- look into optimizing at a later date
+-- | Crude polynomial type.  Look into optimizing at a later date
+type Poly = [Integer] 
 
 -- | CycloPair: Pair of an Integer and its corresponding cyclotomic polynomial
 type CycloPair         = (Integer, Poly)
@@ -305,7 +304,8 @@ cycloDivSet n = fst $ crCycloDivSet (fst $ crFromI n) crCycloInitMap -- no conce
 cycloDivSetWithMap :: Integer -> CycloMap -> (CycloMap, CycloMap)
 cycloDivSetWithMap n m  = crCycloDivSet (fst $ crFromI n) m -- no concern over factorization cutoff here
 
--- | Return pair of expon. multiplier and radical's polynomial along with working cyclotomic map.
+-- Return pair of exponential multiplier and <https://en.wikipedia.org/wiki/Radical_of_an_integer radical>'s i
+-- polynomial along with working cyclotomic map.
 crCyclo :: CR_ -> CycloMap -> (CycloPair, CycloMap)
 crCyclo cr m | crPositive cr   = ((crToI $ crDivStrict cr r, p), m')
              | otherwise       = error "crCyclo: Positive integer needed"
@@ -343,7 +343,7 @@ crCycloDivSet cr m | crPositive cr = m2
                                                                | otherwise = mfn ns mp' 
                                                                where cp@(_, mp') = crCycloAll n mp
 
--- | Compute the "radical" divisors first and then the non-square free entries.
+-- Compute the "radical" divisors first and then the non-square free entries.
 crCycloRad :: CR_ -> CycloMap -> (CycloPair, CycloMap)
 crCycloRad cr m = case cmLookup cr m of 
                     Nothing -> c' -- need to compute it
@@ -428,35 +428,36 @@ crSquareFlag :: CR_ -> Bool
 crSquareFlag = all (\(_, ce) -> mod ce 2 == 0) 
 
 -- | Wrapper for chineseAurifWithMap with default CycloMap parameter
+-- 
+--   Integral examples to try.  These both will return answers of the form: Just (bigFactor1, bigFactor2).  The product of the
+--   two big factors will divide the equivalent value in each comment. 
+--
+--   >>> (q,m,p,k,r,n)=(7,1,19,13,1,1)
+--   >>> chineseAurif ((q^(2*m)*p)^(p*k)) ((r^(2*n))^(p*k)) True -- Equivalent to 931^247+1
+--
+--   >>> (q,m,p,k,r,n)=(5,8,29,13,11,1)
+--   >>> chineseAurif ((q^(2*m)*p)^(p*k)) ((r^(2*n))^(p*k)) False -- Equivalent to (5^16*29)^377 - 121^377
+--
 chineseAurif :: Integer -> Integer -> Bool -> Maybe (Integer, Integer)
 chineseAurif x y b = fst $ chineseAurifWithMap x y b crCycloInitMap
 
--- | Integer wrapper for chineseAurifCr
+-- Integer wrapper for chineseAurifCr
+-- | The source for this algorithm is this <http://www.jams.or.jp/scm/contents/Vol-2-3/2-3-16.pdf paper>
+--   The formula at 2.7 there is implemented in the internal chineseAurifCr function. This will handle a 
+--   subset of the cases that the main Aurif. routines handle.
 chineseAurifWithMap :: Integer -> Integer -> Bool -> CycloMap -> (Maybe (Integer, Integer), CycloMap)
 chineseAurifWithMap x y b m = chineseAurifCr (fst $ crFromI x) (fst $ crFromI y) b m 
 -- practically speaking, factor cutoff is a non-issue
 
--- The source for this algorithm is the paper by Sun Qi, Ren Debin, Hong Shaofang, Yuan Pingzhi and Han Qing
--- http://www.jams.or.jp/scm/contents/Vol-2-3/2-3-16.pdf (The formula at 2.7 there is implemented below)
--- This will handle a subset of the cases that the main Aurif. routines handle
-
--- | This function reduces the two CR parameters by gcd before calling an internal function to find a "Chinese" Aurifeullian factorization.
---   Solutions will be found for any non-zero multiple of xp yp b (where xp and yp are relatively prime)
---   where xp is of the form: (q^2m * p) ^ (p * k) 
---         yp is of the form: (r^2n) ^ (p * k) 
---         (That said, the order of xp and yp can be switched and the same result or non-result would be obtained.)
---         op = + if p == 3 mod 4 and op 
---         op = - if p == 1 mod 4
---         For xp and yp, all of variables (q, m, p, k, r, n) are (CRs equivalent to) positive integers.  
---         p and k are also odd. p must be square-free. q must be relatively prime to k.
---
---   Integral Examples to Try: 
---   chineseAurif ((q^(2*m) * p) ^ (p * k)) ((r^(2*n))^(p * k)) True -- equivalent to 931^247 + 1
---   where (q, m, p, k, r, n) = (7, 1, 19, 13, 1, 1)
---
---   chineseAurif ((q^(2*m) * p) ^ (p * k)) ((r^(2*n))^(p * k)) False -- equivalent to (5^16*29)^377 - 121^377  
---   where (q, m, p, k, r, n) = (5, 8, 29, 13, 11, 1)
---
+-- This function reduces the two CR parameters by gcd before calling an internal function to find a "Chinese" Aurif. factorization.
+-- Solutions will be found for any non-zero multiple of xp yp b (where xp and yp are relatively prime)
+-- where xp is of the form: (q^2m * p) ^ (p * k) 
+--       yp is of the form: (r^2n) ^ (p * k) 
+--       (That said, the order of xp and yp can be switched and the same result or non-result would be obtained.)
+--       op = + if p == 3 mod 4 and op 
+--       op = - if p == 1 mod 4
+--       For xp and yp, all of variables (q, m, p, k, r, n) are (CRs equivalent to) positive integers.  
+--       p and k are also odd. p must be square-free. q must be relatively prime to k.
 chineseAurifCr :: CR_ -> CR_ -> Bool -> CycloMap -> (Maybe (Integer, Integer), CycloMap)
 chineseAurifCr xp yp b m = case c of
                              Nothing -> chineseAurifI mbyx n myx (crToI myx) b m' -- if first try fails, try the reverse
@@ -471,9 +472,9 @@ chineseAurifCr xp yp b m = case c of
                                  mbyx    = crRecip mbxy
                                  myx     = crGCD (crNumer mbyx) ncr  
 
--- | Internal function to find factor of mb^n +/- 1 (mb would be M from paper, mb meaning m "big".
---   Solution forms: Any non-zero multiple of (q^2m * p) ^ (p * k) op (r^2n)^(p * k)  where k is an odd, postive number, m, n > 0.
---   This will work if the op is "+" when mod p 4 = 3   OR when op is "-" for when mod p 4 = 1.
+-- Internal function to find factor of mb^n +/- 1 (mb would be M from paper, mb meaning m "big".
+-- Solution forms: Any non-zero multiple of (q^2m * p) ^ (p * k) op (r^2n)^(p * k)  where k is an odd, postive number, m, n > 0.
+-- This will work if the op is "+" when mod p 4 = 3 OR when the op is "-" for when mod p 4 = 1.
 chineseAurifI :: CR_ -> Integer -> CR_ -> Integer -> Bool -> CycloMap -> (Maybe (Integer, Integer), CycloMap)
 chineseAurifI mbcr n mcr m b mp | mod n 2 == 0        || mod m 2 == 0 ||          -- n and m must both be odd
                                   m < 3               || km /= 0      ||          -- m must be odd and > 1 and m | n

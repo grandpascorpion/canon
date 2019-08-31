@@ -35,7 +35,6 @@ moserTriangle, moserSquare :: Canon -> Canon
 moserPentagon, mega, megiston, moser :: Canon
 
 -- | Generalized Moser function: https://en.wikipedia.org/wiki/Steinhaus%E2%80%93Moser_notation
--- to do: non-recursive definition?
 moserFunc nP mP pP 
   | cIntegral nP && cIntegral mP && cIntegral pP && nP >= c1 && pP >= c3
               = m' nP mP pP
@@ -44,30 +43,31 @@ moserFunc nP mP pP
                  | m > c1    = m' (m' n c1 p) (m-c1) p
                  | p > c3    = m' n           n     (p-c1) 
                  | otherwise = n <^ n
+-- to do: non-recursive definition?
 
--- | Moser Triangle (see Wikipedia link)
+-- | Moser Triangle (see Wikipedia link above)
 moserTriangle n = moserFunc n c1 c3
 
--- | Moser Square (see Wikipedia link)
+-- | Moser Square (see Wikipedia link above)
 moserSquare n   = moserFunc n c1 c4
 
--- | Moser Pentagon (see Wikipedia link)
+-- | Moser Pentagon (see Wikipedia link above)
 moserPentagon = mega
 
--- | Mega: "2 in a circle" (see Wikipedia link) 
+-- | Mega: "2 in a circle" (see Wikipedia link above) 
 mega          = moserFunc c2  c1 c5
 
--- | Megiston: "10 in a circle" (see Wikipedia link) 
+-- | Megiston: "10 in a circle" (see Wikipedia link above) 
 megiston      = moserFunc c10 c1 c5
                 where c10 = makeCanon 10
 
--- | Moser number; "2 in a mega-gon" (see Wikipedia link)
-moser         = moserFunc c2  c1 mega -- "2 in a mega-gon"
+-- | Moser number; "2 in a mega-gon" (see Wikipedia link above)
+moser         = moserFunc c2 c1 mega 
 
 ackermann :: Canon -> Canon -> Canon
 ackermann3 :: Canon -> Canon -> Canon -> Canon
 
--- | Ackermann function (https://en.wikipedia.org/wiki/Ackermann_function)
+-- | <https://en.wikipedia.org/wiki/Ackermann_function Ackermann function>
 ackermann m n
   | cIntegral m && cIntegral n && m >= c0 && n >= c0 
               = a m n
@@ -132,7 +132,7 @@ grahamsNumber :: Canon
 -- | Calls the generalized Graham function with value 3
 grahamFunc = genGrahamFunc c3
 
--- | Graham's Number (https://en.wikipedia.org/wiki/Graham%27s_number)
+-- | <https://en.wikipedia.org/wiki/Graham%27s_number Graham's Number>
 grahamsNumber = grahamFunc 64
  
 -- | Generalized Graham Function
@@ -145,13 +145,12 @@ genGrahamFunc cP nP
 
 knuth :: Canon -> Canon -> Canon -> Canon
 
--- | Knuth's Up Arrow Notation, analagous to hyperoperations (https://en.wikipedia.org/wiki/Knuth%27s_up-arrow_notation)
+-- | <https://en.wikipedia.org/wiki/Knuth%27s_up-arrow_notation Knuth's Up Arrow Notation>, analagous to hyperoperations
 knuth a n b        = cApplyHy (c2 + n) [a,b] True 
 
+-- | <https://en.wikipedia.org/wiki/Conway_chained_arrow_notation Conway Chained-Arrow Notation>: 
+--   This function will try to reduce generalized conway chain notation down to humble hyperoperations (or better).
 conwayChain :: [Canon] -> Canon
-
--- | Conway Chained-Arrow Notation (https://en.wikipedia.org/wiki/Conway_chained_arrow_notation)
---   This function will try to reduce generalized conway chain notation down to humble hyperoperations (or better)
 conwayChain l' 
   | all (\c -> cIntegral c && c > c0) l' = cc l'
   | otherwise                            = error "ConwayChain: Each element in the input list/chain must be integral and > 0"

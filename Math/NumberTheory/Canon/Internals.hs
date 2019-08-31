@@ -11,7 +11,7 @@
 {-# LANGUAGE PatternSynonyms, ViewPatterns, ScopedTypeVariables, DataKinds, RankNTypes #-}
 
 module Math.NumberTheory.Canon.Internals (
-  CanonRep_,       CR_,
+  CanonRep_,       CR_,                        CanonElement_,
   crValidIntegral, crValidIntegralViaUserFunc,
   crValidRational, crValidRationalViaUserFunc,
   crExp,

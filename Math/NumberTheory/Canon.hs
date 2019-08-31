@@ -45,12 +45,12 @@ module Math.NumberTheory.Canon (
   cHyperSum, cHyperProd, cHyperExpo, cHyperSumAny, 
   cHyperize, cQuasiCanonize, cQuasiCanonized, cCleanup, cGetAddends, cGetFactors, cCleanupAsNumDenPair,
 
-  CanonElement, cGetBase, cGetExponent,
+  CanonElement, cGetBase, cGetExponent, SuperPairC, 
   cGetBases, cGetBasesDeep, cGetExponents, cGetElements, 
   cNumDivisors, cTau, cDivisors, cNthDivisor, cWhichDivisor, cRelativelyPrime, cGetFirstNDivisors,
 
-  cN1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, 
-  CycloMap, getIntegerBasedCycloMap, showCyclo, crCycloInitMap -- Exposes cyclotomic map-related functionality from AurifCyclo
+  cN1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, -- small canons
+  CycloMap, getIntegerBasedCycloMap, crCycloInitMap -- Exposes cyc. map-related functionality from AurifCyclo
 )
 where
 
@@ -72,7 +72,7 @@ data CanonValueType = IntC | NirC | IrrC deriving (Eq, Ord, Show)
 -- | This element is a base, exponent pair.  The base is an integer and is generally prime or 0, -1.
 --   The exponent is also a Canon (allowing for arbitrary nesting)
 --   A Canon conceptually consists of a list of these elements.  The first member of the pair will 
---   be a Canon raised to the first power.  By doing this, we're allow for further generality
+--   be a Canon raised to the first power.  By doing this, we allow for further generality
 --   in the definition of a Canon. 
 type CanonElement = (Canon, Canon)
 
@@ -81,10 +81,12 @@ type GCR_  = [GCRE_]
 
 type GCRE_ = (Integer, Canon)
 
--- | Canon: GADT for either Bare (Integer) or some variation of a Can(onical) form (see CanonValueType).
+-- | This is a GADT representing either a Bare (Integer), 
+--   some variation of a Can(onical) form
+--   or a HX (Hyper eXpression) consisting of a level and list of Canons (see CanonValueType)
 data Canon = Bare Integer BareStatus | Can GCR_ CanonValueType | HX Canon [Canon] CanonValueType
 
--- | BareStatus: A "Bare Simp" number means a prime number, +/-1 or 0.  The code must set the flag properly
+-- | BareStatus: A "Bare Simp" number means a prime number, +/-1 or 0.  The code must set the flag properly.
 --               A "Bare NSim" number is an Integer that has not been checked (to see if it can be factored).
 data BareStatus = Simp | NSim deriving (Eq, Ord, Show)
 
@@ -92,7 +94,7 @@ data BareStatus = Simp | NSim deriving (Eq, Ord, Show)
 makeCanon :: Integer -> Canon
 makeCanon n = fst $ makeCanon' n
 
--- | Create a Canon from an Integer.  Also return True if the number is fully factored
+-- | Create a Canon from an Integer.  Returns the Canon and flag indicating full factorization or not.
 makeCanon' :: Integer -> (Canon, Bool)
 makeCanon' n = (f cr, ff)
                where f POne                  = Bare 1 Simp
@@ -125,24 +127,10 @@ maxHyperOpDispLevel = 50;
 maxHyperOpDelveLevel :: Canon 
 maxHyperOpDelveLevel = makeCanon 100; 
 
--- These must correspond with the built-in and defined operators (from addition through hexation), except for ^
-hyperOpStrings :: [String] -- ensure this is consistent with small canons / maxHyperOpDisplayLevel
-hyperOpStrings = [
-  "", "+", "*", "^", "<^>", "<<^>>", "<<<^>>>", "<<<<^>>>>", "<<<<<^>>>>>", "|<^>|",             -- 0-9
-  "~^~", "~<^>~", "~<<^>>~", "~<<<^>>>~", "~<<<<^>>>>~",                                         -- 10-14
-  "~|^|~", "~|<^>|~", "~|<<^>>|~", "~|<<<^>>>|~", "~|<<<<^>>>>|~",                               -- 15-19
-  "~~^~~", "~~<^>~~", "~~<<^>>~~", "~~<<<^>>>~~", "~~<<<<^>>>>~~",                               -- 20-24
-  "~~|^|~~", "~~|<^>|~~", "~~|<<^>>|~~", "~~|<<<^>>>|~~", "~~|<<<<^>>>>|~~",                     -- 25-29
-  "~~~^~~~", "~~~<^>~~~", "~~~<<^>>~~~", "~~~<<<^>>>~~~", "~~~<<<<^>>>>~~~",                     -- 30-34
-  "~~~|^|~~~", "~~~|<^>|~~~", "~~~|<<^>>|~~~", "~~~|<<<^>>>|~~~", "~~~|<<<<^>>>>|~~~",           -- 35-39
-  "~~~~^~~~~", "~~~~<^>~~~~", "~~~~<<^>>~~~~", "~~~~<<<^>>>~~~~", "~~~~<<<<^>>>>~~~~",           -- 40-44
-  "~~~~|^|~~~~", "~~~~|<^>|~~~~", "~~~~|<<^>>|~~~~", "~~~~|<<<^>>>|~~~~", "~~~~|<<<<^>>>>|~~~~", -- 45-49
-  "~~~~~^~~~~~"]                                                                                 -- FIFTY 
-
 smallCanons :: [Canon]
 smallCanons = map (\n -> makeCanon n) [0..maxHyperOpDispLevel]
 
--- | Levels starting with 1 in the hyperoperation hierarchy
+-- | Variable reps ranging from 1 to 9 in the hyperoperation hierarchy
 cAddOpLevel, cMultOpLevel, cExpOpLevel, cTetrOpLevel, 
   cPentOpLevel, cHexOpLevel, cHeptOpLevel, cOctOpLevel, cNonOpLevel :: Canon
 
@@ -150,8 +138,8 @@ cAddOpLevel, cMultOpLevel, cExpOpLevel, cTetrOpLevel,
     cPentOpLevel : cHexOpLevel  : cHeptOpLevel : cOctOpLevel  : cNonOpLevel : _) = smallCanons
 
 -- | Various show functions: cShowFull - fully expand large primes and composites in Canon expression.  
---   "Unf" in name means don't factor unless it's too big too display
---    "AsCode" in name means you can copy and paste the results and execute them. 
+--   Unf in name means don't factor unless it's too big too display
+--   AsCode in name means you can copy and paste the results and execute them. 
 cShowFull, cShowFullAsCode, cShowAsCode, cShowAsCodeUnf, cShowUnf, cShowForEqChk :: Canon -> String
 cShowFull       = cShow True  False False False
 cShowFullAsCode = cShow True  True  False False
@@ -347,15 +335,19 @@ cMod2Check m _ (HX PoM cL IntC) = mod (product $ map (\c -> mod c c2) cL) 2 == s
 cMod2Check m _ (HX _   cL IntC) = mod (head cL) 2 == smallCanons !! m
 cMod2Check _ _ _                = False
 
--- | GCD and LCM functions for Canon
-cGCD, cLCM :: Canon -> Canon -> Canon
+-- | <https://en.wikipedia.org/wiki/Greatest_common_divisor Greatest Common Divisor> function 
+cGCD :: Canon -> Canon -> Canon
 cGCD x y | cHyperExprAny x || cHyperExprAny y = head $ cMultiplicative x y Gcd 
          | otherwise                          = cLGApply gcrGCD x y
+
+-- | <https://en.wikipedia.org/wiki/Least_common_multiple Least Common Multiple> function 
+cLCM :: Canon -> Canon -> Canon
 cLCM x y | cHyperExprAny x || cHyperExprAny y = head $ cMultiplicative x y Lcm
          | otherwise                          = cLGApply gcrLCM x y
 
--- | Compare Function (cHyperCmp is internal)
+-- Compare Functions 
 cCmp, cCmpH, cCmp' :: Canon -> Canon -> Ordering
+
 -- cCmp a b | trace ("cCmp: (a=" ++ show a ++ ") and (b=" ++ show b ++ ")") False = undefined
 cCmp (Bare x _)      (Bare y _)   = compare x y
 cCmp x@(Can _ _)     y@(Bare _ _) = gcrCmp (cToGCR x) (cToGCR y)
@@ -487,6 +479,7 @@ exprDomination :: Canon -> Canon -> Bool
 -- exprDomination d s | trace ("exprDomination: (s=" ++ show s ++ ") and (d=" ++ show d ++ ")") False = undefined
 exprDomination d s = eD d s False -- The flag indicates what whether we are already embedded or not in the structure
 
+-- expression domination internal function
 eD :: Canon -> Canon -> Bool -> Bool
 -- eD d' s' b' | trace ("eD: (d' = " ++ show d' ++ ", s' = " ++ show s' ++ ", b' = " ++ show b' ++ ")") False = undefined
 eD d' s' b' | notBoth s' d' && not b'     = s' < d'   -- first level check
@@ -556,11 +549,11 @@ cApplyHy ho a b = if length a == 0 && b
                  then error "cApplyHy: Null list passed. Specified as fatal condition by calling fcn"
                  else fst (cHyperOp ho a crCycloInitMap) -- This function will do any simplifications 
 
--- | Find the maximum hyperoperation embedded in a Canon
+-- | Find the maximum hyperoperation embedded in a Canon.
 cMaxHyperOp :: Canon -> Canon
 cMaxHyperOp = findSigHyOp max
 
--- | Find the minimum hyperoperation embedded in a Canon.  (If not at all, return zer0
+-- | Find the minimum hyperoperation embedded in a Canon.  (If it's not a hyper expression, return zero.)
 cMinHyperOp :: Canon -> Canon
 cMinHyperOp = findSigHyOp mHo 
               where mHo a b | a == b    = a
@@ -590,7 +583,7 @@ cQuotRem x y m | cHyperExprAny x || cHyperExprAny y = ((hQ, c0), mR) -- ToDo: Ha
                                             (d, m')  = cSubtract x md m
                      (hQ, mR)       = cDiv x y m
 
--- | Mod function
+-- | <https://en.wikipedia.org/wiki/Modular_arithmetic Modulus> function
 cMod :: Canon -> Canon -> Canon
 -- cMod c m | trace ("cMod: (c=" ++ show c ++ "), m=" ++ show m ++ ")") False = undefined
 cMod c m | not (cIntegral c) || not (cIntegral m) 
@@ -599,7 +592,7 @@ cMod c m | not (cIntegral c) || not (cIntegral m)
          | m == cGCD c m = c0 -- c is a multiple of m. If m is a hyper expr, this all we can do for now
          | otherwise     = makeCanon $ cModI c (cToI m)                          
 
--- | Mod function between a Canon and integer.  This is usually called by cMod
+-- Mod function between a Canon and Integer.  This is usually called by cMod.
 cModI :: Canon -> Integer -> Integer
 -- cModI c m | trace ("cModI: (c=" ++ show c ++ "), m=" ++ show m ++ ")") False = undefined
 cModI _   0       = error "cModI: Divide by zero error when computing n mod 0"
@@ -648,7 +641,7 @@ cModI c   m       | cn && mn         = -1 * cma
                                                          cm' y lv | y == 0    = nv -- at end
                                                                   | otherwise = cm' (y-1) nv 
                                                                   where nv = makeCanon $ cModI (r <^ lv) m'
--- | Totient functions
+-- | <https://en.wikipedia.org/wiki/Euler%27s_totient_function Totient> function(s)
 cTotient, cPhi :: Canon -> CycloMap -> (Canon, CycloMap)
 cTotient c m | (not $ cIntegral c) || cNegative c = error "Not defined for non-integral or negative numbers"
              | not $ cSimplified c                      = error "cTotient Can't compute if number not completely factored"
@@ -669,8 +662,24 @@ cTotient c m | (not $ cIntegral c) || cNegative c = error "Not defined for non-i
 cPhi = cTotient
 
 
--- | The thinking around the hyperoperators is that they should look progressively scarier :)
--- | They range from level 4 / tetration (<^>) to level 50 (~~~~~^~~~~~). Please read .odp file for the naming convention.
+-- The thinking around the hyperoperators is that they should look progressively scarier :)
+ 
+-- These must correspond with the built-in and defined operators (from addition through hexation), except for ^
+hyperOpStrings :: [String] -- ensure this is consistent with small canons / maxHyperOpDisplayLevel
+hyperOpStrings = [
+  "", "+", "*", "^", "<^>", "<<^>>", "<<<^>>>", "<<<<^>>>>", "<<<<<^>>>>>", "|<^>|",             -- 0-9
+  "~^~", "~<^>~", "~<<^>>~", "~<<<^>>>~", "~<<<<^>>>>~",                                         -- 10-14
+  "~|^|~", "~|<^>|~", "~|<<^>>|~", "~|<<<^>>>|~", "~|<<<<^>>>>|~",                               -- 15-19
+  "~~^~~", "~~<^>~~", "~~<<^>>~~", "~~<<<^>>>~~", "~~<<<<^>>>>~~",                               -- 20-24
+  "~~|^|~~", "~~|<^>|~~", "~~|<<^>>|~~", "~~|<<<^>>>|~~", "~~|<<<<^>>>>|~~",                     -- 25-29
+  "~~~^~~~", "~~~<^>~~~", "~~~<<^>>~~~", "~~~<<<^>>>~~~", "~~~<<<<^>>>>~~~",                     -- 30-34
+  "~~~|^|~~~", "~~~|<^>|~~~", "~~~|<<^>>|~~~", "~~~|<<<^>>>|~~~", "~~~|<<<<^>>>>|~~~",           -- 35-39
+  "~~~~^~~~~", "~~~~<^>~~~~", "~~~~<<^>>~~~~", "~~~~<<<^>>>~~~~", "~~~~<<<<^>>>>~~~~",           -- 40-44
+  "~~~~|^|~~~~", "~~~~|<^>|~~~~", "~~~~|<<^>>|~~~~", "~~~~|<<<^>>>|~~~~", "~~~~|<<<<^>>>>|~~~~", -- 45-49
+  "~~~~~^~~~~~"] 
+
+-- | Defined specialty hyper operators range from level 4 / tetration (\<^\>) to level 50 (~~~~~^~~~~~). 
+--   See source or .odp file for the operator naming convention.
 infixr <^>, <<^>>, <<<^>>>, <<<<^>>>>, <<<<<^>>>>>, |<^>|,                                  -- 4-9
        ~^~, ~<^>~, ~<<^>>~, ~<<<^>>>~, ~<<<<^>>>>~,                                         -- 10-14
        ~|^|~, ~|<^>|~, ~|<<^>>|~, ~|<<<^>>>|~, ~|<<<<^>>>>|~,                               -- 15-19
@@ -694,20 +703,21 @@ infixr <^>, <<^>>, <<<^>>>, <<<<^>>>>, <<<<<^>>>>>, |<^>|,                      
   (~~~~~^~~~~~)                                                                                  -- FIFTY
     :: Canon -> Canon -> Canon
 
-a         <^>         b = cTetration a b
+-- Operator definitions.  Note: The Christmas tree like effect
+a         <^>         b = cTetration a b -- Starting at level 4, wrap the previous operator in < >
 a        <<^>>        b = cPentation a b
 a       <<<^>>>       b = cHexation  a b
 a      <<<<^>>>>      b = cHeptation a b
 a     <<<<<^>>>>>     b = cOctation  a b
-a        |<^>|        b = cNonation  a b
-a         ~^~         b = cApplyHy (makeCanon 10) [a,b] True
-a        ~<^>~        b = cApplyHy (makeCanon 11) [a,b] True
-a       ~<<^>>~       b = cApplyHy (makeCanon 12) [a,b] True
+a        |<^>|        b = cNonation  a b -- At level 9, we introduce "|".   
+a         ~^~         b = cApplyHy (makeCanon 10) [a,b] True -- At level 10, we introduce the character "~"
+a        ~<^>~        b = cApplyHy (makeCanon 11) [a,b] True -- The nomenclature from 10 onward is different
+a       ~<<^>>~       b = cApplyHy (makeCanon 12) [a,b] True -- from 4 through 9 
 a      ~<<<^>>>~      b = cApplyHy (makeCanon 13) [a,b] True
 a     ~<<<<^>>>>~     b = cApplyHy (makeCanon 14) [a,b] True
-a        ~|^|~        b = cApplyHy (makeCanon 15) [a,b] True
-a       ~|<^>|~       b = cApplyHy (makeCanon 16) [a,b] True
-a      ~|<<^>>|~      b = cApplyHy (makeCanon 17) [a,b] True
+a        ~|^|~        b = cApplyHy (makeCanon 15) [a,b] True -- At level 15, instead of 5 < >, we use "|". 
+a       ~|<^>|~       b = cApplyHy (makeCanon 16) [a,b] True -- We use this convention for multiples of 5 from here
+a      ~|<<^>>|~      b = cApplyHy (makeCanon 17) [a,b] True -- on out
 a     ~|<<<^>>>|~     b = cApplyHy (makeCanon 18) [a,b] True
 a    ~|<<<<^>>>>|~    b = cApplyHy (makeCanon 19) [a,b] True
 a        ~~^~~        b = cApplyHy (makeCanon 20) [a,b] True
@@ -762,16 +772,27 @@ cOctation a b  = cApplyHy cOctOpLevel  [a,b] True
 -- | Nonation Function -- Level 9
 cNonation a b  = cApplyHy cNonOpLevel  [a,b] True
 
--- | Hyperoperation List Operators.  On display, the towers will have single caret operators interspersed.
+-- Hyperoperation List Operators.  On display, the towers will have single caret operators interspersed.
 infixr 9 <^^>, <<^^>>, <<<^^>>>, <<<<^^>>>>, <<<<<^^>>>>>, |<^^>|
 
 (<^^>), (<<^^>>), (<<<^^>>>), (<<<<^^>>>>), (<<<<<^^>>>>>), (|<^^>|) :: Canon -> [Canon] -> Canon
 
+-- | Tetration list operator
 a     <^^>     b = fst $ cTetrationL a b crCycloInitMap
+
+-- | Pentation list operator
 a    <<^^>>    b = fst $ cPentationL a b crCycloInitMap
+
+-- | Hexation list operator
 a   <<<^^>>>   b = fst $ cHexationL  a b crCycloInitMap
+
+-- | Heptation list operator
 a  <<<<^^>>>>  b = fst $ cHeptationL a b crCycloInitMap
+
+-- | Octation list operator
 a <<<<<^^>>>>> b = fst $ cOctationL  a b crCycloInitMap
+
+-- | Nonation list operator
 a    |<^^>|    b = fst $ cNonationL  a b crCycloInitMap
 
 cTetrationL, cPentationL, cHexationL, cHeptationL, cOctationL, cNonationL
@@ -795,7 +816,7 @@ cOctationL a b m  = cHyperOp cOctOpLevel (a:b) m
 -- | Nonation List Function
 cNonationL a b m  = cHyperOp cNonOpLevel (a:b) m 
 
--- | Generalized Hyperoperation Function (https://en.wikipedia.org/wiki/Hyperoperation)
+-- | Generalized <https://en.wikipedia.org/wiki/Hyperoperation Hyperoperation> Function
 cHyperOp :: Canon -> [Canon] -> CycloMap -> (Canon, CycloMap)
 -- cHyperOp n l _ | trace ("cHyperOp: (ho=" ++ show n ++ "), l=" ++ show l ++ ")") False = undefined
 cHyperOp n l@(a:b:cs) m 
@@ -1091,15 +1112,17 @@ cGetHyperOp :: Canon -> Canon
 cGetHyperOp (HX h _ _) = h
 cGetHyperOp _          = c0
 
--- | Exponentiation and root operator declarations
+-- Exponentiation and root operator declarations
 infixr 9 <^, >^
-
 (<^), (>^) :: Canon -> Canon -> Canon
 
+-- | Special exponentiation operator for Canon (One MUST use this instead of the standard exp. operator: ^)
 a <^ b = fst $ cExp a b True crCycloInitMap
+
+-- | Root operator 
 r >^ n = cRoot n r
 
--- | Convert a Canon back to its underlying rep (if possible).
+-- Convert a Canon back to its underlying rep (if possible).
 cToCR :: Canon -> CR_
 cToCR (Can c v)      | v /= IrrC = gcrToCR c 
                      | otherwise        = error "cToCR: Cannot convert irrational canons to underlying data structure"
@@ -1108,12 +1131,12 @@ cToCR (Bare n NSim)  = fst $ crFromI n
 cToCR (Bare n Simp)  = [(n,1)] -- not ideal
 cToCR c              = gcrToCR $ cToGCR c -- this could be EXTREMELY expensive for hyper-expressions.
 
--- | Convert generalized canon rep to Canon.
+-- Convert generalized canon rep to Canon.
 gcrToC :: GCR_ -> Canon
 gcrToC g | gcrBare g = Bare (gcrToI g) Simp
          | otherwise = Can g (gcrCVT g)
 
--- | For generalized canon rep, determine the CanonValueType.   
+-- For generalized canon rep, determine the CanonValueType.   
 gcrCVT :: GCR_ -> CanonValueType         
 gcrCVT POne = IntC
 gcrCVT g    = g' g IntC -- start Integral, can only get "worse"
@@ -1130,14 +1153,14 @@ gcrCVT g    = g' g IntC -- start Integral, can only get "worse"
                     dcv v    (Bare  _ _)  = v
                     dcv v    c            = if cNegative c then NirC else v
 
--- | Define some small canons for convenience
+-- | Define some small canons for convenience from (-1 to 9)
 cN1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9 :: Canon
 (cN1:c0:c1:c2:c3:c4:c5:c6:c7:c8:c9:_) = map makeCanon [-1..maxHyperOpDispLevel]
 
 impossibleHyperValue :: Canon
 impossibleHyperValue = cN1 -- used internally as a sentinel
 
--- | Convert Canon to Integer if possible.
+-- Convert Canon to Integer if possible.
 cToI :: Canon -> Integer
 cToI (Bare i _ )       = i
 cToI c@(Can g v)  | v == IntC && (cHyperExpr c || cSuperLogGT (fst $ cSuperLog c) cSuperLogCutoff)
@@ -1151,7 +1174,7 @@ tooBigError, nonIntError :: Canon -> String
 tooBigError c = "This expression is too large to be converted to an integer: " ++ show c
 nonIntError c = "Can't convert a non-integral canon to an integer: " ++ show c
 
--- | Convert Canon To Double.
+-- Convert Canon To Double.
 cToD :: Canon -> Double
 cToD (Bare i _) = fromIntegral i
 cToD (Can c _)  = gcrToD c
@@ -1181,7 +1204,7 @@ cAdd, cSubtract :: Canon -> Canon -> CycloMap -> (Canon, CycloMap)
 cAdd      = cApplyAdtvOp True 
 cSubtract = cApplyAdtvOp False 
 
--- | Internal Function to compute sum or difference based on first param.  Much heavy lifting under the hood here.
+-- Internal Function to compute sum or difference based on first param.  Much heavy lifting under the hood here.
 cApplyAdtvOp :: Bool -> Canon -> Canon -> CycloMap -> (Canon, CycloMap)
 -- cApplyAdtvOp _ x y _ | trace ("cApplyAdtvOp: Processing: (" ++ show x ++ ") and (" ++ show y ++ ")") False = undefined
 cApplyAdtvOp _     x   Pc0 m = (x, m)
@@ -1241,9 +1264,9 @@ cExp c e b m | cNegative e && (not b)
                                                              (t, mn)   = f gs mx
                                                              (fp, mf') = gcrMult [(p, prd)] t mn
 
--- | Functions to check if a canon is negative/positive
 cNegative, cPositive :: Canon -> Bool
 
+-- | Function to check if a Canon is negative
 -- cNegative c | trace ("cNegative: (l=" ++ show c ++ "))") False = undefined
 cNegative (Bare n _   ) = n < 0
 cNegative (Can c  _   ) = gcrNegative c
@@ -1261,13 +1284,15 @@ cNegative (HX PoA cL _) | lp == 0                       = True
 cNegative (HX PoM cL _) = cNegative $ head cL
 cNegative (HX _   _  _) = False -- tetration and beyond can only result in positive numbers
 
+-- | Function to check if a Canon is positive
 cPositive (Bare n   _  ) = n > 0
 cPositive (Can  c   _  ) = gcrPositive c
 cPositive h@(HX PoA _ _) = not $ cNegative h -- zero is not possible in a hyper-expression.
 cPositive h@(HX PoM _ _) = not $ cNegative h -- same for products
 cPositive (HX   _   _ _) = True -- tetration and beyond can only result in positive numbers
 
--- | Functions for negation, absolute value and signum
+
+-- Functions for negation, absolute value and signum
 cNegate, cAbs, cSignum :: Canon -> Canon 
 
 -- cNegate c | trace ("cNegate: Processing: v=("++show c ++ ")") False = undefined
@@ -1305,8 +1330,8 @@ cLGApply f x   y   | cNegative x ||
                      cNegative y = gcrToC $ f (cToGCR $ cAbs x) (cToGCR $ cAbs y)
                    | otherwise   = gcrToC $ f (cToGCR x)        (cToGCR y)
 
--- | This function tries to convert a hyper expression to "canonical" form.  It is rather limited
---   due to the way power towers branch for composite numbers in canonical form. Conversions can be used for non-integral division.
+-- This function tries to convert a hyper expression to "canonical" form.  It is rather limited
+-- due to the way power towers branch for composite numbers in canonical form. Conversions can be used for non-integral division.
 tryToCanonizeHyperExpr :: Canon -> Maybe Canon
 tryToCanonizeHyperExpr c@(HX _ _ _) 
   | cHyperSumAny c || cMaxHyperOp c > cTetrOpLevel || cMaxTetrLevel > 10 = Nothing
@@ -1366,7 +1391,7 @@ tryHyperDiv x y m
         (hyDef, fmx, fmy)  = (impossibleHyperValue, fmch x, fmch y) 
         (fQ, m')           = cDiv fmx fmy m -- feed the canonical reps back into the function
 
--- Converts an integral "Canonical" canon to a hyper product. Error if the canon is not integral  Otherwise, it leaves the canon as is. 
+-- Converts an integral "Canonical" canon to a hyper product. Error if canon is not integral  Otherwise, it leaves the canon as is. 
 -- ToDo: What if the result is not a hyper expr after going through the function?
 cConvertToHyperExpr :: Canon -> Canon
 cConvertToHyperExpr c | not (cIntegral c)               = error "Cannot convert a non-integral canon to a hyper expression"
@@ -1384,40 +1409,53 @@ cReciprocal x | not (cHyperExprAny x) = fst $ cExp x cN1 True crCycloInitMap  --
               where fmch v        = fromMaybe hyDef (tryToCanonizeHyperExpr v)
                     (hyDef, fmx)  = (impossibleHyperValue, fmch x) 
 
--- | Functions to check if a Canon is Integral, (Ir)Rational, "Simplified", a prime or a prime tower
+-- Functions to check if a Canon is Integral, (Ir)Rational, Simplified, a prime or a prime tower
 cIntegral, cIrrational, cRational, cSimplified, cPrime, cIsPrimeTower :: Canon -> Bool
 
+-- | Check if Canon is Integral
 cIntegral   c = cValueType c == IntC
+-- | Check if Canon is Irrational
 cIrrational c = cValueType c == IrrC
+-- | Check if Canon is Rational
 cRational   c = not $ cIrrational c
 
+-- | Check if Canon is simplified, meaning completely factored
 cSimplified (Bare _ Simp) = True
 cSimplified (Bare _ NSim) = False
 cSimplified (Can  c _)    = gcrSimplified c
 cSimplified c@(HX h l _)  = h /= cAddOpLevel && ((cHyperProd c && all cSimplified l) || (cSimplified $ head l))
 
+-- | Check if Canon is prime
 cPrime c = cSimplified c && c > c1 -- Simp includes 0, -1
 
+-- | Check if Canon is a prime tower
 cIsPrimeTower c          = cPrimeTowerLevel c > 0 -- x^x would not be, but x^x^x would be
 
--- | Utility functions regarding hyperoperations.  "Any" functions search the entire expression
+-- Utility functions regarding hyperoperations.  "Any" functions search the entire expression
 cHyperExpr, cHyperExprAny, cHyperSum, cHyperSumAny, cHyperProd, cHyperExpo :: Canon -> Bool
 
+-- | Check if Canon is a hyperexpression
 cHyperExpr    = cHyperPredCheck (>= cAddOpLevel) False
+
+-- | Check if Canon has a hyperexpression anywhere in its definition
 cHyperExprAny = cHyperPredCheck (>= cAddOpLevel) True
 
+-- | Check if Canon is a positive sum (or negative one times a positive sum).  Internally, all level 1 expressions are positive.
 cHyperSum (HX h (j:k:cs) _) = h == cAddOpLevel || 
                               (h == cMultOpLevel && j == cN1 && cGetHyperOp k == cAddOpLevel && null cs)
 cHyperSum _                 = False
 
+-- | Check if Canon has a hypersum embedded in the expression
 cHyperSumAny = cHyperPredCheck (== cAddOpLevel) True -- when looking any we can just go by hyper op
 
+-- | Check if Canon is a product (and specificlly not a negative sum)
 cHyperProd c@(HX PoM _ _) = not $ cHyperSum c -- Note: a negative sum is not considered a product
 cHyperProd _              = False;
 
-cHyperExpo = cHyperPredCheck (== cExpOpLevel) False -- checks if this is an exponential expression
+-- | Check if Canon is an exponential expression
+cHyperExpo = cHyperPredCheck (== cExpOpLevel) False
 
--- | Takes a predicate related to the hyper operation.  It will search recursively if the 2nd flag is set.
+-- Takes a predicate related to the hyper operation.  It will search recursively if the 2nd flag is set.
 cHyperPredCheck :: (Canon -> Bool) -> Bool -> Canon -> Bool 
 cHyperPredCheck f b c | f (cGetHyperOp c) = True
                       | not b             = False -- don't do the any check
@@ -1426,12 +1464,14 @@ cHyperPredCheck f b c | f (cGetHyperOp c) = True
                             cHP' (Can g _)  = any (cHyperPredCheck f b) $ map snd g
                             cHP' _          = False
 
--- | cNumerator and cDenominator are for processing "rational" canon reps.
+-- cNumerator and cDenominator are for processing "rational" canon reps.
 cNumerator, cDenominator :: Canon -> Canon
 
+-- | Return the numerator
 cNumerator (Can c _ ) = gcrToC $ filter (\x -> cPositive $ snd x) c -- filter positive exponents
 cNumerator b          = b 
 
+-- | Return the denominator
 cDenominator (Can c _ ) = gcrToC $ map (\(p,e) -> (p, cN1*e)) $ filter (\(_,e) -> cNegative e) c -- negate neg expnts
 cDenominator _          = c1  -- ToDo: For now, hyper expressions are always integral 
 
@@ -1459,7 +1499,7 @@ cNestExpTail c'@(HX h (b:xs) IntC) bF
         errorMsg = "nestedExpTail: requires a hyper expression at level >= exponentiation: " ++ show c'
 cNestExpTail _ _     = c1
 
--- | Break code into a canonized 
+-- | Try to make expression more elegant by creating exponential tails and then hyperizing them
 cCleanup :: Canon -> Canon
 cCleanup = cHyperize . cQuasiCanonize
 
@@ -1473,9 +1513,12 @@ cCleanupAsNumDenPair c = (n,d)
         spl c'   = (simpleHX cAddOpLevel pos, simpleHX cAddOpLevel (map negate neg)) 
                    where (pos, neg) = partition cPositive $ cGetAddends c' -- positive and negative entries in exponent sum expression
 
--- | Hyperize will take a Canon in quasi-canonized form and try to clean it up in a tidier expression
--- Example: 7 ^ ( 1 + 2 * (49 <^> 7) = 7 * 49 <^> 8.  ToDo: Enhancement: Partial hyperizing?
-cHyperize :: Canon -> Canon
+-- | cHyperize will take a Canon in quasi-canonized form and try to clean it up in a tidier expression
+--
+-- >>> cShowUnf $ cHyperize $  7 <^ ( 1 + 2 * (49 <^> 7))
+-- 7 * 49 <^> 8
+
+cHyperize :: Canon -> Canon -- ToDo: Enhancement: Partial hyperizing
 cHyperize c | not (cQuasiCanonized c) || (h /= cExpOpLevel && h /= cMultOpLevel) || null iM 
                         = c
             | any cNegative $ concat $ map (\(_,e) -> cGetAddends e) $ map expPromote $ cGetFactors c -- 
@@ -1604,15 +1647,16 @@ cGetAddends c = if cGetHyperOp c == cAddOpLevel then cGetHyperList c else [c]
 cGetFactors :: Canon -> [Canon]
 cGetFactors c = if cGetHyperOp c == cMultOpLevel then cGetHyperList c else [c]
 
--- | Take a canon and a list of indexes and delve into the canon.  This operates on the internal hyper lists
+-- | Take a Canon and a list of indexes and delve into the Canon.  This operates on the internal hyper lists.
 cDelve :: Canon -> [Int] -> Canon
 cDelve c xL | x < length hL = if null xs then e else cDelve e xs
             | otherwise     = error $ "Can not find index " ++ show x ++ " in canon: " ++ show c 
             where (hL, e) = (cGetHyperList c, hL !! x)
                   (x:xs)  = xL
 
+-- Utility function to apply the function supplied if the level of hyperoperation matches
 applyFcnForHy :: Canon -> Canon -> (Canon -> [Canon]) -> Canon
-applyFcnForHy c h f           = if cGetHyperOp c == h then simpleHX h (f c) else c
+applyFcnForHy c h f = if cGetHyperOp c == h then simpleHX h (f c) else c
 
 -- FactorSumIter: Performs steps like: a*b + b + c =>  b * (a+1)+c.
 factorSumIter :: Bool -> Canon -> Canon
@@ -1623,7 +1667,7 @@ factorSumIter hF (HX PoA hL _) = fs (head hL) (tail hL) []
                                        fs a _      wL = computeExpr cAddOpLevel (wL ++ [a])
 factorSumIter _  c             = c
 
--- | This checks if the (hyper)expression is in quasi-canonical form 
+-- | This checks if the (hyper)expression is in quasi-canonical form.
 cQuasiCanonized :: Canon -> Bool
 cQuasiCanonized (HX PoA _ _)        = True
 cQuasiCanonized c@(HX PoM l _)      = all cQuasiCanonized l && null (cGetBases' True True False c)
@@ -1631,7 +1675,7 @@ cQuasiCanonized (HX PoE (b:_:xs) _) = (cBare b || cGetHyperOp b == cAddOpLevel) 
 cQuasiCanonized (HX h _ _)          = h > maxHyperOpDelveLevel -- anything else like tetration has not been simplified
 cQuasiCanonized _                   = True
 
--- | This is akin to canonical form except you may have sums in the bases. It converts expression up to a hyperoperational cutoff
+-- | This is akin to canonical form except you may have sums in the bases. It converts expression up to a hyperoperational cutoff.
 cQuasiCanonize :: Canon -> Canon
 -- cQuasiCanonize c | trace ("cQuasiCanonize: (c = " ++ show c ++ ")") False = undefined
 cQuasiCanonize c | cGetHyperOp c > maxHyperOpDelveLevel || (pF && null sM) -- nothing below the the hyper limit
@@ -1824,7 +1868,7 @@ cPrimeTowerLevel c@(HX h l@(b:xl) _)  | h < cExpOpLevel || any cHyperExprAny l |
                                       | otherwise                 = c -- it's so massive just return the number itself.  Not that critical.
 cPrimeTowerLevel _                  = c0
 
--- | Internal workhorse function to compute the height of a prime tower (e.g. 5^(5^7) => 3)
+-- Internal workhorse function to compute the height of a prime tower (e.g. 5^(5^7) => 3)
 cPrimeTowerLevelI :: Canon -> Integer -> Integer -> Canon
 cPrimeTowerLevelI (Bare b _)   n l | b == n    = makeCanon $ l + 1 
                                    | otherwise = c0
@@ -1834,7 +1878,7 @@ cPrimeTowerLevelI (Can g IntC) n l | gcrPrimePower g == False = c0
 cPrimeTowerLevelI _            _ _ = 0 -- This is only for internal display.  Not needed for hyper-expressions.
 
 
--- | Function to convert Canon to generalized canon rep
+-- Function to convert Canon to generalized canon rep
 cToGCR :: Canon -> GCR_
 --cToGCR c | trace ("cToGCR: (c = " ++ show c ++ ")") False = undefined -- Tracing here may cause stack overflow!
 cToGCR c = case gAtt of 
@@ -1940,8 +1984,8 @@ gcrCmpTo1 PNeg b = if b then GT else LT
 gcrCmpTo1 Pg0  b = if b then GT else LT
 gcrCmpTo1 _    b = if b then LT else GT 
 
--- | These internal functions should not be called directly.  The definition of GCD and LCM 
---   are extended to handle non-Integers.
+-- These internal functions should not be called directly.  The definition of GCD and LCM 
+-- are extended to handle non-Integers.
 gcrGCD, gcrLCM :: GCR_ -> GCR_ -> GCR_  
 gcrGCD Pg0 y   = y
 gcrGCD x   Pg0 = x
@@ -2097,15 +2141,15 @@ gcrSimplified :: GCR_ -> Bool
 gcrSimplified = all (\(b,e) -> cSimplified e && check b) 
                 where check n = crFactCutoff <= 0 || n < crFactCutoff || (n > crFactCutoff && isPrime n)
 
--- | Return the base b from a Canon Element (equivalent to b^e)
+-- | Return the base b from a CanonElement (equivalent to b^e).
 cGetBase :: CanonElement -> Canon
 cGetBase (b, _) = b
 
--- | Return the exponent e from a Canon Element (equivalent to b^e)
+-- | Return the exponent e from a CanonElement (equivalent to b^e).
 cGetExponent :: CanonElement -> Canon
 cGetExponent (_, e) = e
 
--- | Return the list of bases from a Canon (conceptually of the form [b^e])>
+-- | Return the list of bases from a Canon (conceptually of the form [b^e]).
 cGetBases :: Canon -> [Canon]
 cGetBases = cGetBases' False False False -- don't check if in range
 
@@ -2127,7 +2171,8 @@ cGetBases' f d h c -- if f flag True, only keep the "True" matches based on allo
                                where pF = not $ f && cHyOpLvlOutOfRange y -- If true, we drill down
                                -- e.g 3^4 or 3<^>4.  First member of list is 3.  Could also be a composite
 
--- | Similar to cGetBases except that it will do trial factoring of any hyper sums.  So, for obvious reasons, this is not a complete factorization.
+-- | This is similar to cGetBases except that it will do trial factoring of any hyper sums.  i
+--   So, for obvious reasons, this is not a complete factorization.
 cGetBasesDeep :: Canon -> [Canon]
 cGetBasesDeep c@(HX PoA l _) = sort $ nub ((c':i) ++ sF)
                                where i  = foldl1 intersect $ map cGetBasesDeep l
@@ -2149,11 +2194,12 @@ cGetElements b@(Bare _ _)  = [(b, c1)]
 cGetElements (Can g _)     = map convGCREToCE g
 cGetElements hx@(HX _ _ _) = map convGCREToCE $ cToGCR hx
 
--- | Convert a generalized canon rep element to a CanonElement
+-- Convert a generalized canon rep element to a CanonElement
 convGCREToCE :: GCRE_ -> CanonElement
 convGCREToCE (b, e) = (makeCanon b, e) -- ToDo: Optimize as b is already known to be a prime here
 
--- | Divisor functions should be called with integral Canons. Restricted to positive divisors. Returns Either String Canon
+-- | Note: <https://en.wikipedia.org/wiki/Divisor_function Divisor count function>(s) should be called with integral Canons. 
+--   Restricted to positive divisors. Returns Either String Canon
 cNumDivisors, cTau :: Canon -> Canon
 cNumDivisors c = case (cNumDivisors' c) of
                  Left  s -> error s
@@ -2161,7 +2207,7 @@ cNumDivisors c = case (cNumDivisors' c) of
 
 cTau = cNumDivisors
 
--- | Underlying divisor function that can return value or (error) message.
+-- Underlying divisor function that can return value or (error) message.
 cNumDivisors' :: Canon -> Either String Canon
 cNumDivisors' c 
   | not (canComputeDivs c') = Left $ "Canon was zero, not integral or not completely factored.  Can't compute."
@@ -2227,7 +2273,7 @@ cWhichDivisor d c | not (cIntegral d)       = Left "cWhichDivisor: d must be int
                                                           | otherwise = error "Logic error: Unexpected factors found in divisor"
 
 -- | Efficiently compute all of the divisors based on the canonical representation.
--- | Returns Either an error message or a list of Canons.
+--   Returns either an error message or a list of Canons.
 cDivisors :: Canon -> Either String [Canon]
 cDivisors c | not (canComputeDivs c') = Left "cWhichDivisor: Canon was either zero or not completely factored.  Can't compute"
             | otherwise               = divs c'
@@ -2312,7 +2358,8 @@ superLogICutoff = (2, 5.0) -- 10^10^5
 cSuperLogCutoff :: SuperPairC
 cSuperLogCutoff = (makeCanon $ fst superLogICutoff, snd superLogICutoff) -- 10^10^5
 
--- |  This is the super or iterated log function.  A level and mantissa is returned along with the number's sign.  
+-- | This is the super log function.  Similar to the <https://en.wikipedia.org/wiki/Iterated_logarithm iterated log function>.  
+--   A level and mantissa is returned along with the number's sign.  
 cSuperLog :: Canon -> (SuperPairC, Int)
 -- cSuperLog c | trace ("cSuperLog: Processing: (c=" ++ show c ++ ")") False = undefined
 cSuperLog (Bare n _)        = (makeSuperLogC $ superLogI n, if n > 0 then 1 else (-1))
@@ -2693,7 +2740,7 @@ pattern PcN1 <- Can [(-1, Bare 1 _)] _
 cMaxExpoToExpand :: Canon 
 cMaxExpoToExpand = c4 
 
--- need to finesse this to get the right operation returned.  If sortByHypo has more than one entry, then it's a sum. 
+-- ToDo: need to finesse this to get the right operation returned.  If sortByHypo has more than one entry, then it's a sum. 
 -- Do we just create a hyper expr
 distHyperExpr, distSum, distProduct, distExpo :: Canon -> Canon -> ([Canon], Bool)
 distHyperExpr c m | h == cAddOpLevel        = (dS, dS /= hL) 
@@ -2904,7 +2951,8 @@ cFactorSum c@(HX PoA hL _) hF | gcdL == c1 || (hF && not (cHyperExpr gcdL))
 cFactorSum c               _  = c
 -- To do: any additional poly factorizations
 
--- | cFactorHorizon: Good for polynomial-like expressions like: (1 + 3<^>4 + 3<^>5) <^ 3 - 1, where there's a mixture of "canonical" and hE exponents.
+-- | This is good for polynomial-like expressions like: (1 + 3\<^\>4 + 3\<^\>5) <^ 3 - 1, 
+--   where there's a mixture of "canonical" and hE exponents.
 cFactorHorizon :: Canon -> Canon
 cFactorHorizon c | gcdL == c1 || length hL' == 1 = c -- return as is 
                  | otherwise                     = computeExpr cMultOpLevel ((cGetFactors gcdL) ++ [simpleHX cAddOpLevel aL])
