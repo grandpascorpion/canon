@@ -41,7 +41,7 @@ module Math.NumberTheory.Canon (
   cPentOpLevel, cHexOpLevel,  cHeptOpLevel, cOctOpLevel, cNonOpLevel, -- Hyper levels 5-9
   cGetHyperList, cGetHyperOp, maxHyperOpDispLevel, maxHyperOpDelveLevel, 
   cFactorSum, cConvertToSum, cMaxExpoToExpand, cFactorHorizon, 
-  cApplyHy, cHyperOp, cHyperExpr, cHyperExprAny, cMaxHyperOp, cMinHyperOp, 
+  cApplyHy, cHyperOp, cHyperExpr, cHyperExprAny, cMaxHyperOp, cMinHyperOp, cMaxHyperOpForQC,
   cHyperSum, cHyperProd, cHyperExpo, cHyperSumAny, 
   cHyperize, cQuasiCanonize, cQuasiCanonized, cCleanup, cGetAddends, cGetFactors, cCleanupAsNumDenPair,
 
@@ -213,6 +213,10 @@ cShow b p i m c
                                                   se      = cShow b p i m e
                              expOp          = if p then "<^" else "^"
 
+-- ToDo: When UNF flag is set for large expressions, fix this bug: 
+--       cShowAsCodeUnf (or cShowUnf) $ (7 <^ (3 * (7 <^> (2<^2)))) * ((cApplyHy (7 <^> 5) [5, 5] True) <^ 2
+--       {7 ^ {3 * {7 <^> 4}}} * *** Exception: Unable to take cSuperLog of massive hyper expression: 5 <H{7 <^> 5}> 5
+
 canConvToI :: Canon -> Bool
 canConvToI c = not $ cSuperLogGT (fst $ cSuperLog c) cSuperLogCutoff 
 
@@ -359,6 +363,9 @@ cCmp x               y            | signum y == c1 && signum x /= c1   = LT
                                   | signum x == c1 && signum y /= c1   = GT
                                   | signum x == cN1 && signum y == cN1 = cCmp (abs y) (abs x)
                                   | otherwise                          = cCmpH x y
+
+-- ToDo: Fix this bug: This comparison hangs: compare ((7 <^> 5) <^ (7 <^> 11)) ((7 <^> 12) <^ (7 <^> 4))
+--       These are equal (It comes from an identity determining while writing cQuasiCanonize).  The "superLog" is the same.
 
 -- At this point, we are comparing positive hyper expressions.  Should not be called directly.
 -- cCmpH a b | trace ("cCmpH: (a=" ++ show a ++ ") and (b=" ++ show b ++ ")") False = undefined -- Interferes with show
@@ -568,6 +575,13 @@ findSigHyOp f (Can g _)   = foldl1 f $ map runningSig g
                             where runningSig (_, e) | e == c1   = cMultOpLevel 
                                                     | otherwise = f cExpOpLevel (findSigHyOp f e) -- at least exp
 findSigHyOp f (HX h hl _) = f h (foldl1 f $ map (findSigHyOp f) hl) 
+
+-- | Used when checking if one can quasi-canonize a hyper expression (should be compared against the cutoff) 
+cMaxHyperOpForQC :: Canon -> Canon
+cMaxHyperOpForQC c | cHyperSum c  = c1 -- don't delve into the hyper sum
+                   | cHyperProd c = foldr max (cGetHyperOp c) $ map cMaxHyperOpForQC $ cGetFactors c
+                   | cHyperExpr c = max (cGetHyperOp c) (cMaxHyperOpForQC $ head $ cGetHyperList c) 
+                   | otherwise    = c0 
 
 -- | QuotRem Function
 cQuotRem :: Canon -> Canon -> CycloMap -> ((Canon, Canon), CycloMap)
@@ -1518,8 +1532,15 @@ cCleanupAsNumDenPair c = (n,d)
 -- >>> cShowUnf $ cHyperize $  7 <^ ( 1 + 2 * (49 <^> 7))
 -- 7 * 49 <^> 8
 
-cHyperize :: Canon -> Canon -- ToDo: Enhancement: Partial hyperizing
-cHyperize c | not (cQuasiCanonized c) || (h /= cExpOpLevel && h /= cMultOpLevel) || null iM 
+cHyperize :: Canon -> Canon -- Partial hyperizing is enabled now
+cHyperize c | null oM = hyperize' c
+            | null iM = c
+            | otherwise = simpleHX cMultOpLevel (iMp : oM)
+            where (oM, iM) = partition (\m -> cMaxHyperOpForQC m > maxHyperOpDelveLevel) $ cGetFactors c  
+                  iMp      = hyperize' $ simpleHX cMultOpLevel iM
+
+hyperize' :: Canon -> Canon
+hyperize' c | not (cQuasiCanonized c) || (h /= cExpOpLevel && h /= cMultOpLevel) || null iM 
                         = c
             | any cNegative $ concat $ map (\(_,e) -> cGetAddends e) $ map expPromote $ cGetFactors c -- 
                         = c -- For example, we can't cleanup 3 <^> 5 / 3 <^> 4 = 3 ^ (3<^>4 - 3<^>3) into a simple expression
@@ -1527,6 +1548,7 @@ cHyperize c | not (cQuasiCanonized c) || (h /= cExpOpLevel && h /= cMultOpLevel)
                         = c 
             | not (foldl1 (&&) $ map snd process)                             -- not all "tail-convertible")
                         = c 
+            | null grp  = c                                                   -- Should mean there's nothing to be done
             | not (foldl1 (&&) $ map (\(_,l) -> allTheSame $ map snd l) grp)  -- not all multipliers are the same
                         = c 
             | null grp' || not (foldl1 (&&) $ map snd grp')                   -- not all elements of each base accounted for
@@ -1546,7 +1568,7 @@ cHyperize c | not (cQuasiCanonized c) || (h /= cExpOpLevel && h /= cMultOpLevel)
 
                   grpExpr l@(_:_:_) = gE' l []
                   grpExpr ((e,p):_) = [(e, [p])]
-                  grpExpr _         = error $ "Blank list passed to grpExpr when processing c = " ++ show c
+                  grpExpr _         = [] -- Not a fatal condition: error $ "Blank list passed to grpExpr when processing c = " ++ show c
 
                   gE' l@((xf,_):_) wL = gE' nM ((xf, map snd m):wL) -- all the add'l base info for that expression
                                         where (m,nM) = partition (\e -> xf == fst e) l
@@ -1672,25 +1694,26 @@ cQuasiCanonized :: Canon -> Bool
 cQuasiCanonized (HX PoA _ _)        = True
 cQuasiCanonized c@(HX PoM l _)      = all cQuasiCanonized l && null (cGetBases' True True False c)
 cQuasiCanonized (HX PoE (b:_:xs) _) = (cBare b || cGetHyperOp b == cAddOpLevel) && null xs -- only b ^ e not b ^ e ^ x
-cQuasiCanonized (HX h _ _)          = h > maxHyperOpDelveLevel -- anything else like tetration has not been simplified
+cQuasiCanonized c@(HX _ _ _)        = cMaxHyperOpForQC c > maxHyperOpDelveLevel -- anything else like tetration has not been simplified
 cQuasiCanonized _                   = True
 
 -- | This is akin to canonical form except you may have sums in the bases. It converts expression up to a hyperoperational cutoff.
 cQuasiCanonize :: Canon -> Canon
 -- cQuasiCanonize c | trace ("cQuasiCanonize: (c = " ++ show c ++ ")") False = undefined
-cQuasiCanonize c | cGetHyperOp c > maxHyperOpDelveLevel || (pF && null sM) -- nothing below the the hyper limit
+cQuasiCanonize c | (not pF && cMaxHyperOpForQC c > maxHyperOpDelveLevel) || -- Non-product and too-high check
+                   (pF && null sM) -- nothing below the the hyper limit
                              = c -- don't attempt to canonize
-                 | pF && not (null bM) -- there are entries beyond the hyper limit.
+                 | pF && not (null bM) -- there are entries beyond the hyper limit in the product
                              = computeExpr cMultOpLevel ((cL sMp) ++ bM)
                  | otherwise = computeExpr cMultOpLevel (cL c)     -- all below the hyper limit
-  where (bM, sM)              = partition (\m -> cGetHyperOp m > maxHyperOpDelveLevel) $ cGetHyperList c -- partition product
-        (sMp, pF)             = (computeExpr cMultOpLevel sM, cGetHyperOp c == cMultOpLevel)
+  where (bM, sM)        = partition (\m -> cMaxHyperOpForQC m > maxHyperOpDelveLevel) $ cGetHyperList c -- partition product
+        (sMp, pF)       = (computeExpr cMultOpLevel sM, cGetHyperOp c == cMultOpLevel)
         -- "Endless" looping! cL c' = map (\l -> promote (fst $ head l, fst $ cConvertToSum $ sum $ map snd l)) $
-        cL c'                 = map (\l -> promote (fst $ head l, sum $ map snd l)) $   -- ToDo: Make this more robust?
-                                groupBy (\x y -> fst x == fst y) $ sortOn fst $ can' c'
-        promote (b',e')       | e' == c1         = b'
-                              | cHyperExprAny e' = (computeExpr cExpOpLevel [b',e'])
-                              | otherwise        = b' <^ e' 
+        cL c'           = map (\l -> promote (fst $ head l, sum $ map snd l)) $   -- ToDo: Make this more robust?
+                          groupBy (\x y -> fst x == fst y) $ sortOn fst $ can' c'
+        promote (b',e') | e' == c1         = b'
+                        | cHyperExprAny e' = (computeExpr cExpOpLevel [b',e'])
+                        | otherwise        = b' <^ e' 
 
         can' c'@(HX h l'@(b:xs) IntC) 
           | h == cAddOpLevel  = [(c', c1)] -- you need the base
@@ -1736,15 +1759,16 @@ cMultiplicative v w t
   | t == Mult            = [v * w] -- No longer does anything distinct from multiplication
   | t == Lcm && relPrime = if v' == c1 then [abs w]
                                        else (if w' == c1 then [abs v]
-                                                         else [hyperize' $ cCleanup $ head $ cMultiplicative' vA wA t])
-  | t == Lcm             = [hyperize' $ cCleanup $ head $ cMultiplicative' (cQuasiCanonize vA) (cQuasiCanonize wA) t]
+                                                         else [h' $ cCleanup $ head $ cMultiplicative' vA wA t])
+  | t == Lcm             = [h' $ cCleanup $ head $ cMultiplicative' (cQuasiCanonize vA) (cQuasiCanonize wA) t]
   | t == Gcd && relPrime = [gHvw,  f v' v, f w' w] 
   | otherwise            = [gHvw', f v2 v, f w2 w]
   where gvw             = cGCD v w -- non-hyper
         (vA, wA)        = (abs v, abs w)
-        hyperize' c     = simpleHX cMultOpLevel (concat $ map (\e -> cGetFactors $ if cQuasiCanonized e then cHyperize e else e) $ cGetFactors c)
-        (gHvw:v':w':_)  = map (hyperize' . cCleanup) $ cMultiplicative' vA  wA  Gcd -- first try
-        (gHvw2:v2:w2:_) = map (hyperize' . cCleanup) $ cMultiplicative' (cQuasiCanonize v') (cQuasiCanonize w') Gcd 
+        -- ToDo: Roll h' into the main cHyperize function.  It's doing redundant work now
+        h' c            = simpleHX cMultOpLevel (concat $ map (\e -> cGetFactors $ if cQuasiCanonized e then cHyperize e else e) $ cGetFactors c)
+        (gHvw:v':w':_)  = map (h' . cCleanup) $ cMultiplicative' vA  wA  Gcd -- first try
+        (gHvw2:v2:w2:_) = map (h' . cCleanup) $ cMultiplicative' (cQuasiCanonize v') (cQuasiCanonize w') Gcd
         gHvw'           = gHvw * gHvw2
         relPrime        = null $ intersect (cGetBases v') (cGetBases w')              
         f a' a          = if signum a == cN1 then negate a' else a'  -- efficient way to adjust by sign
@@ -1811,7 +1835,7 @@ cMultiplicative' v w t = [apply r, apply xN, apply yN]
                        | otherwise = (aN, b ++ bN,       g) -- feed the lists back in
 
                      f' j fB = if fB then getBase' j     else j
-                     e' j fB = if fB then (if cGetHyperOp j > maxHyperOpDelveLevel
+                     e' j fB = if fB then (if cGetHyperOp j > maxHyperOpDelveLevel -- ToDo: Use cMaxHyperOpForQC
                                            then impossibleHyperValue 
                                            else cNestExpTail j False) -- ToDo: replace with cQuasiCanonize
                                      else c1 -- if whole expression, exp is just 1
@@ -1847,26 +1871,33 @@ cRoot c r
   | cNegative c && cEven r = error "cRoot does not support imaginary numbers (even roots of negative numbers)." 
   | all (\(_,e) -> cMod e r == 0) cL'
                            = if cNegative c then negate root else root
-  | cMaxHyperOp c > maxHyperOpDelveLevel 
+  | cMaxHyperOp c > maxHyperOpDelveLevel
                            = error $ "Root could not be found but that may be due to the level of hyper operation being beyond the cutoff: " ++ show c
   | otherwise              = error $ "The root requested was not a multiple of all the exponents in the expansion of " ++ show c
   where cL'  = map expPromote $ allFactors $ cQuasiCanonize $ abs c
-        root = simpleHX cMultOpLevel $ map (\(p,e) -> expDemote (p, e / r)) cL' 
+        root = cCleanup $ simpleHX cMultOpLevel $ map (\(p,e) -> expDemote (p, e / r)) cL' 
+
+-- ToDo: Fix this hanging.  3 >^ ( (((7 <<<<^>>>> 504) <<^>> 8) <^ 3)).  cCleanup works ok though
+-- ToDo: This is properly computed 7 >^ ((7 <^> 400) <<^>> 7) but then 
+--       raising it to the 7th power doesn't give you the orig exp.  Too complex for now.
+-- ToDo: Handle this by expanding what cQuasiCanonize can do.  Say z = grahamsNumber <^> 5, (grahamsNumber <^> 4) >^ z = grahamsNumber. 
+
 
 -- | This is used for tetration, etc.  It defaults to zero for non-integral reps.
 cPrimeTowerLevel :: Canon -> Canon                  
-cPrimeTowerLevel (Bare _ Simp)        = c1
-cPrimeTowerLevel (Can g IntC)         | gcrPrimePower g   = cPrimeTowerLevelI (snd $ head g) (fst $ head g) (1 :: Integer)
-                                      | otherwise         = c0
-cPrimeTowerLevel c@(HX h l@(b:xl) _)  | h < cExpOpLevel || any cHyperExprAny l || not (cPrime b) 
-                                                                  = c0 -- ToDo: handle nested hyper expression cases properly
-                                      | h == cExpOpLevel          = if cQuasiCanonized c && cMaxHyperOp c > cExpOpLevel
-                                                                    then (cPrimeTowerLevel $ cHyperize c)
-                                                                    else (makeCanon $ toInteger $ length l)
-                                      | h == cTetrOpLevel         = simpleHX h xl
-                                      | h <= maxHyperOpDelveLevel = cDelve (cQuasiCanonize c) [1,1] -- gets the tetration expression
-                                      | otherwise                 = c -- it's so massive just return the number itself.  Not that critical.
-cPrimeTowerLevel _                  = c0
+cPrimeTowerLevel (Bare _ Simp)       = c1
+cPrimeTowerLevel (Can g IntC)        | gcrPrimePower g   = cPrimeTowerLevelI (snd $ head g) (fst $ head g) (1 :: Integer)
+                                     | otherwise         = c0
+cPrimeTowerLevel c@(HX h l@(b:xl) _) | h < cExpOpLevel || any cHyperExprAny l || not (cPrime b) 
+                                                         = c0 -- ToDo: handle nested hyper expression cases properly
+                                     | h == cExpOpLevel  = if cQuasiCanonized c && cMaxHyperOp c > cExpOpLevel
+                                                           then (cPrimeTowerLevel $ cHyperize c)
+                                                           else (makeCanon $ toInteger $ length l)
+                                     | h == cTetrOpLevel = simpleHX h xl
+                                     | cMaxHyperOpForQC c <= maxHyperOpDelveLevel 
+                                                         = cDelve (cQuasiCanonize c) [1,1] -- gets the tetration expression
+                                     | otherwise        = c -- it's so massive just return the number itself.  Not that critical.
+cPrimeTowerLevel _                   = c0
 
 -- Internal workhorse function to compute the height of a prime tower (e.g. 5^(5^7) => 3)
 cPrimeTowerLevelI :: Canon -> Integer -> Integer -> Canon
@@ -2303,10 +2334,10 @@ cGetFirstNDivisors n c = case cDivisors c of
 -- Assumes unsigned input
 canComputeDivs :: Canon -> Bool
 canComputeDivs c | cBare c && (cToI c == 0)                    = False
-                 | not (cSimplified c) || not (cIntegral c)    = False
+                 | not (cSimplified c && cIntegral c)          = False
                  | not (cHyperExpr c)                          = True
                  | cHyperSum c                                 = False
-                 | cGetHyperOp c > maxHyperOpDelveLevel        = False
+                 | cMaxHyperOpForQC c > maxHyperOpDelveLevel   = False 
                  | cHyperProd c && not (all canComputeDivs cL) = False
                  | otherwise                                   = canComputeDivs b
                  where cL@(b:_) = cGetHyperList c
@@ -2372,9 +2403,10 @@ cSuperLog (HX PoM p _)      = cSuperLogProd p
 cSuperLog (HX PoE e _)      = (cSuperLogExp e, 1) -- ToDo: always positive?
 
 -- beyond exponentiation, get the tower height from the tail and adjust by offset
-cSuperLog c@(HX h (b:cs) _) | h > maxHyperOpDelveLevel = error $ "Unable to take cSuperLog of massive hyper expression: " ++ show c
-                            | h == cTetrOpLevel        = ((sv1 + offset, m), 1) -- in case the cNestExpTail is not a hyper expr.
-                            | otherwise                = ((c1 + offset + (head $ tail $ cGetHyperList $ cNestExpTail c False), m), 1)
+cSuperLog c@(HX h (b:cs) _) | cMaxHyperOpForQC c > maxHyperOpDelveLevel 
+                                                = error $ "Unable to take cSuperLog of massive hyper expression: " ++ show c
+                            | h == cTetrOpLevel = ((sv1 + offset, m), 1) -- in case the cNestExpTail is not a hyper expr.
+                            | otherwise         = ((c1 + offset + (head $ tail $ cGetHyperList $ cNestExpTail c False), m), 1)
                             where (offset, m) = getTowerMantissa b sv1
                                   sv1         = cApplyHy h cs True
 cSuperLog _                 = error "Logic error in Super Log: Default Canon configuration unexpectedly reached"
@@ -2929,10 +2961,10 @@ expPromote v     | cGetHyperOp v == cExpOpLevel = (head h, computeExpr cExpOpLev
                  where h = cGetHyperList v 
 
 expPromoteFull :: Canon -> Canon
-expPromoteFull c | cGetHyperOp c > maxHyperOpDelveLevel = error "expPromoteFull: Can't perform this action.  Max hyper op at base level exceeded."
-                 | otherwise                            = simpleHX cMultOpLevel newFactors
+expPromoteFull c | cMaxHyperOpForQC c > maxHyperOpDelveLevel 
+                             = error "expPromoteFull: Can't perform this action.  Max hyper op at base level exceeded."
+                 | otherwise = simpleHX cMultOpLevel newFactors
                  where (hE, nonHe) = partition cHyperExpr $ cGetFactors $ cQuasiCanonize c
-                       prmNonHe :: [(Canon, Canon)]
                        prmNonHe    = map (\(p,e) -> (makeCanon p, e)) $ concat $ map cToGCR nonHe 
                        newFactors :: [Canon]
                        newFactors  = map (\(p,e) -> simpleHX cExpOpLevel [p,e]) $ 
@@ -2967,7 +2999,7 @@ cFactorHorizon c | gcdL == c1 || length hL' == 1 = c -- return as is
 Cleanup / Hyperize / QuasiCanonize examples:
 Run cCleanup which is cHyperize . cQuasiCanonize
 
-Identity found as a result: (a <^> x) <^ (a <^> y) = (a <^> (y+1)) <^ (a <^> (y-1))
+Identity found as a result: (a <^> x) <^ (a <^> y) = (a <^> (y+1)) <^ (a <^> (x-1))
 
 testsGood = [ -- Worked despite P3 bug
  (7 <^> (2<^2)) <^ 7 <^ (7 <<^>> 5), (2 <<^>> (7<^2 * 25303)) * (2 <<<^>>> (17 * 23 * 317)),
@@ -3021,6 +3053,7 @@ testsQCHang0526Solved = [
  ((3 <^> 5) <<^>> 7) ~~^~~ 5,
  (3 * 15 <<^>> 7) <^> 4,
  (3 * 15 <<^>> 7 * 7 ~^~ 7) <^> 4,
+ 13 <^> 3, -- but doesn't leave it as a tetration
  (4 <^> 7) ~~^~~ 5,
  (60 <^> 7) ~~^~~ 5, 
  (12 <^> 7) ~~^~~ 5 ]
@@ -3037,10 +3070,11 @@ Correctly doesn't convert:
 Hangs:
 3 ^ 3 * 6 <^> 4 -- Canonical issue
 3 * 3 <<^>> 5 * 6 <^> 4 -- Canonical meeets Hyper expression issue
+
+Doesn't convert
 (12 * 28 <^> 5) <^> 7
 
 Utility func for verifying:
 v c = map hypMap $ map (\l -> (l !! 0, l !! 1)) $ map cGetHyperList $ cGetFactors $ cQuasiCanonize c
 
 -}
-

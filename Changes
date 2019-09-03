@@ -1,3 +1,9 @@
+0.1.1.4:
+    Use new cMaxHyperOpForQC function instead of cGetHyperOp.
+    This allows for more flexibility when quasi-canonizing.
+    cHyperize : Allow for partial "hyperizing"
+    cRoot: Can handle roots of numbers beyond the max delve level hyper op. 
+
 0.1.1.3:
     Documentation enhancements.  A few types expose to clean up warnings but otherwise no API or logic changes.
 
